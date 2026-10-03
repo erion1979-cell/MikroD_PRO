@@ -1,0 +1,48 @@
+{
+  "producer": "powerguard",
+  "producerName": "PowerGuard",
+  "model": "modbus-v1.1",
+  "modelName": "Line-interactive inverter (Modbus protocol V1.1)",
+  "kind": "inverter",
+  "serial": "9600 8N1",
+  "reads": [
+    { "function": 4, "start": 0, "count": 36 }
+  ],
+  "fields": [
+    { "key": "input_v",       "reg": 0,  "div": 10 },
+    { "key": "input_hz",      "reg": 1,  "div": 10 },
+    { "key": "output_v",      "reg": 2,  "div": 10 },
+    { "key": "output_hz",     "reg": 3,  "div": 10 },
+    { "key": "output_a",      "reg": 4,  "div": 10 },
+    { "key": "load_pct",      "reg": 6 },
+    { "key": "battery_v",     "reg": 7,  "div": 10 },
+    { "key": "battery_pct",   "reg": 9 },
+    { "key": "dc_bus_a",      "reg": 12, "div": 10 },
+    { "key": "temp_internal", "reg": 13, "div": 10 },
+    { "key": "temp_ambient",  "reg": 14, "div": 10 }
+  ],
+  "flags": {
+    "reg": 32,
+    "bits": { "mains_ok": 0, "charger_on": 1, "inverter_on": 2, "output_on": 8 }
+  },
+  "raw": [
+    { "key": "warning_bits", "reg": 33 },
+    { "key": "error_bits",   "reg": 34 }
+  ],
+  "event": {
+    "reg": 35,
+    "notFault": [0, 9],
+    "codes": {
+      "0": "No event",
+      "1": "Internal overcurrent protection",
+      "2": "Output short circuit protection",
+      "3": "Output overload protection",
+      "4": "System over temperature protection",
+      "5": "High battery voltage protection",
+      "6": "Low battery voltage protection",
+      "7": "Phase sequence error warning",
+      "8": "Output voltage low protection",
+      "9": "ECO starts"
+    }
+  }
+}
