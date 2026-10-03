@@ -6,7 +6,7 @@ Modbus TCP (no RTU-over-TCP needed). Serial side always matches the inverter:
 
 ## E30-485 (Huayun / "E300", 1 × RS485)
 
-Tested and working with the Top One Power unit.
+Tested and working with the PowerGuard unit.
 
 | Page / section | Setting | Value |
 |---|---|---|

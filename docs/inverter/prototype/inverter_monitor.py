@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Inverter Monitor - Top One Power inverter over Modbus TCP (E30 / ZLAN gateway)
+Inverter Monitor - PowerGuard inverter over Modbus TCP (E30 / ZLAN gateway)
 
 Reads input registers 0-35 (function 04) from the inverter through an
 Ethernet-to-RS485 converter in Modbus Gateway mode, and shows them on a
@@ -451,7 +451,7 @@ function chart(svgId, series, maxY, unit){
 }
 
 function render(j){
-  $('where').textContent = `Top One Power inverter · ${j.host}:${j.port}`;
+  $('where').textContent = `PowerGuard inverter · ${j.host}:${j.port}`;
   fillForm(j);
   $('interval').textContent = j.interval+' s';
   $('age').textContent = j.age==null ? 'never' : j.age+' s ago';
@@ -584,7 +584,7 @@ def make_handler(monitor):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Top One Power inverter monitor (Modbus TCP, read-only)")
+    ap = argparse.ArgumentParser(description="PowerGuard inverter monitor (Modbus TCP, read-only)")
     ap.add_argument("--host", help="converter IP (default: last saved, else 192.168.4.1)")
     ap.add_argument("--port", type=int, help="converter Modbus TCP port (default 502)")
     ap.add_argument("--unit", type=int, help="inverter slave ID (default 1)")

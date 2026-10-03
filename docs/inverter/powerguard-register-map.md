@@ -1,6 +1,6 @@
-# Top One Power inverter — Modbus register map (verified)
+# PowerGuard inverter — Modbus register map (verified)
 
-Source: *Foshan Top One Power — Inverter Modbus Protocol V1.1 (2022-11)*, corrected and
+Source: the manufacturer's *Inverter Modbus Protocol V1.1 (2022-11)*, corrected and
 confirmed against a real unit on 2026-10-02 through an E30 converter in Modbus Gateway
 mode, read with QModMaster.
 

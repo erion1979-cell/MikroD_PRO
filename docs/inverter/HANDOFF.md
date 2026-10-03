@@ -7,7 +7,7 @@ Companion files in this folder:
 
 | File | What it is |
 |---|---|
-| `top-one-power-register-map.md` | Modbus register map for the first supported inverter, **verified on a real unit** |
+| `powerguard-register-map.md` | Modbus register map for the first supported inverter, **verified on a real unit** |
 | `converters.md` | How to configure the Ethernet-to-RS485 converters (E30 and ZLAN7144N2) |
 | `prototype/inverter_monitor.py` | Working Python prototype (stdlib only): polls the inverter, decodes, detects events, serves a live page. Use it as the reference for decoding and event logic. |
 | `mockups/*.png` | Agreed look of the per-inverter page in three states (on mains, on battery, overload fault) |
@@ -39,7 +39,7 @@ history, shows dashboards and sends alerts.
 3. **Must keep running as a container on small MikroTik routers**, like MikroDash
    (amd64, arm64, armv7; static Go binary). No heavy dependencies.
 4. **Several producers, not just one.** Scope covers inverters and UPSs from multiple
-   brands (Top One Power first; PowerGuard, SVC and others later). Organize as
+   brands (PowerGuard first; SVC and others later). Organize as
    **producer → model**, each model with its own register map, scaling, status-bit and
    event-code definitions. Adding a model should mean adding a definition, not new
    polling code.
@@ -82,9 +82,9 @@ history, shows dashboards and sends alerts.
 - Battery estimated runtime needs battery Ah, which the inverter does not report: leave
   as a field the user can fill in later, or omit.
 
-## 5. Behaviour learned from the real Top One Power unit
+## 5. Behaviour learned from the real PowerGuard unit
 
-(Details in `top-one-power-register-map.md`.)
+(Details in `powerguard-register-map.md`.)
 
 - It is a **line-interactive (offline) inverter**: on mains, "inverter running" is OFF
   and mains passes through; on battery, the inverter switches on. Status register 032
@@ -129,6 +129,6 @@ Not yet tested on the real unit: on battery **with a load** (registers 004, 006,
    `README.md`; study how a collector, its settings, alerts, history and a page are wired.
 2. Propose a short plan: where the module plugs in, the producer/model definition format,
    data model and storage, which existing files change. Wait for approval.
-3. Build in small steps, starting with the Modbus client + Top One Power decoder with
+3. Build in small steps, starting with the Modbus client + PowerGuard decoder with
    unit tests (use the verified readings in the register map as test vectors), then the
    collector, then the page, then alerts.
