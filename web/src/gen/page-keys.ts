@@ -80,6 +80,7 @@ export const ALL_NAV_PAGES: readonly string[] = [
   "audit-trail",
   "backups",
   "devices",
+  "power-ups",
   "config-management",
   "terminal",
   "ai-agent",

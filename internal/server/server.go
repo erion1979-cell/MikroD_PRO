@@ -642,6 +642,8 @@ func (s *Server) Handler() http.Handler {
 	s.registerSites(mux)
 	s.registerNotifyChannels(mux)
 	s.registerAbout(mux)
+	// The Power/UPS page's units (power_api.go).
+	s.registerPower(mux)
 
 	// ── THE SHARED ASSETS, AND AN HONEST 404 FOR EVERYTHING ELSE ─────────
 	//

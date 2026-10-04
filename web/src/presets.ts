@@ -44,6 +44,10 @@ const HAND_TIERS: Record<string, Tier> = {
   // applies on top, and so does the device's own sniffer flag.
   'tools-sniffer': 'advanced',
   'ai-agent': 'advanced',
+  // Power/UPS (docs/inverter/PLAN.md) at Standard: it reads inverters, never
+  // writes to them, and an operator watching a site's power is not an advanced
+  // user.
+  'power-ups': 'standard',
   // Advanced, and never below it: the Terminal runs whatever is typed, and a
   // preset called Standard should not switch that on for somebody who chose a
   // nav layout. Its own gates still apply on top.

@@ -1,0 +1,166 @@
+  <!-- The Power/UPS page (docs/inverter/PLAN.md): inverters and UPSs read over
+       Modbus TCP by internal/power, drawn by web/src/pages/power-ups.ts. One
+       card holds both views: the fleet list, and one unit's page when a row is
+       opened. The tabs filter the list by status. -->
+  <div class="page-view" id="page-power-ups">
+    <div class="container-fluid px-0" style="width:100%">
+      <div class="card" id="pwCard">
+        <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+          <div class="d-flex align-items-center gap-2">
+            <h3 class="card-title mb-0">Power/UPS</h3>
+            <span id="pwBadge" class="card-badge active-blue" title="Units">0</span>
+            <span id="pwTabs" class="stab-bar rttab-bar" role="tablist">
+              <button class="stab active" type="button" role="tab" aria-selected="true" data-pwtab="all">All</button>
+              <button class="stab" type="button" role="tab" aria-selected="false" data-pwtab="mains">On mains</button>
+              <button class="stab" type="button" role="tab" aria-selected="false" data-pwtab="battery">On battery</button>
+              <button class="stab" type="button" role="tab" aria-selected="false" data-pwtab="fault">Fault</button>
+              <button class="stab" type="button" role="tab" aria-selected="false" data-pwtab="down">Not responding</button>
+            </span>
+          </div>
+          <div class="hdr-actions d-flex align-items-center gap-2">
+            <button class="sbtn sbtn-primary" id="pwAdd" type="button" hidden>+ Add unit</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="muted-note mb-2" id="pwNotice" hidden></div>
+
+          <!-- ── THE FLEET LIST ── -->
+          <div id="pwListView">
+            <div class="pw-summary" id="pwSummary"></div>
+            <div class="table-responsive">
+              <table class="table table-vcenter card-table pw-table">
+                <thead><tr id="pwHead"></tr></thead>
+                <tbody id="pwBody"></tbody>
+              </table>
+            </div>
+            <div class="muted-note mt-2" id="pwEmpty" hidden>No units yet. Add one with its converter's IP address, port and the unit's slave ID.</div>
+          </div>
+
+          <!-- ── ONE UNIT ── -->
+          <div id="pwUnitView" hidden>
+            <div class="pw-crumbs">
+              <button class="sbtn sbtn-outline" type="button" id="pwBack">&larr; All units</button>
+              <span class="pw-crumb-site" id="pwUnitSite"></span>
+              <span class="pw-unit-name" id="pwUnitName"></span>
+              <span id="pwUnitOnline"></span>
+              <span class="pw-crumb-age" id="pwUnitAge"></span>
+              <button class="sbtn sbtn-outline" type="button" id="pwEdit" hidden>Edit</button>
+            </div>
+
+            <div class="pw-banner" id="pwBanner">
+              <div>
+                <div class="pw-banner-title" id="pwBannerTitle"></div>
+                <div class="pw-banner-sub" id="pwBannerSub"></div>
+              </div>
+              <div class="pw-chips" id="pwChips"></div>
+            </div>
+
+            <div class="pw-grid">
+              <div class="pw-card pw-wide">
+                <div class="pw-card-title">Power flow <span class="pw-calc" id="pwApparent"></span></div>
+                <div class="pw-flow" id="pwFlow"></div>
+              </div>
+              <div class="pw-card">
+                <div class="pw-card-title">Battery</div>
+                <div class="pw-big" id="pwBatPct"></div>
+                <div class="pw-bar"><div id="pwBatBar"></div></div>
+                <div class="pw-kv" id="pwBatKv"></div>
+              </div>
+              <div class="pw-card"><div class="pw-card-title">Input</div><div id="pwInput"></div></div>
+              <div class="pw-card"><div class="pw-card-title">Output</div><div id="pwOutput"></div></div>
+              <div class="pw-card"><div class="pw-card-title">Load</div><div id="pwLoad"></div></div>
+              <div class="pw-card"><div class="pw-card-title">Temperature</div><div id="pwTemp"></div></div>
+              <div class="pw-card pw-wide" id="pwHistoryCard">
+                <div class="pw-card-title">History</div>
+                <div id="pwHistory" class="muted-note">History charts arrive in the next update.</div>
+              </div>
+              <div class="pw-card">
+                <div class="pw-card-title">Events</div>
+                <div class="pw-events" id="pwEvents"></div>
+              </div>
+            </div>
+
+            <div class="pw-conn" id="pwConn"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── ADD / EDIT A UNIT ── -->
+    <div class="rtr-modal-bg" id="pwFormWrap">
+      <div class="rtr-modal pmodal">
+        <div class="rtr-modal-hdr">
+          <span class="rtr-modal-title" id="pwf_title">Add unit</span>
+          <button class="rtr-modal-close" data-modal-close="pwFormWrap" aria-label="Close">&#10005;</button>
+        </div>
+        <div class="rtr-modal-body">
+          <input type="hidden" id="pwf_id">
+          <div class="sform-row">
+            <div>
+              <label class="sform-label" for="pwf_name">Name</label>
+              <input class="sform-input" id="pwf_name" type="text" placeholder="INV-01" autocomplete="off" maxlength="64">
+            </div>
+            <div>
+              <label class="sform-label" for="pwf_site">Site</label>
+              <select class="sform-input" id="pwf_site"></select>
+            </div>
+          </div>
+          <div class="sform-row" style="margin-top:.6rem">
+            <div>
+              <label class="sform-label" for="pwf_model">Model</label>
+              <select class="sform-input" id="pwf_model"></select>
+            </div>
+            <div>
+              <label class="sform-label" for="pwf_battery">Battery capacity, Ah <span class="pw-optional">(optional)</span></label>
+              <input class="sform-input" id="pwf_battery" type="number" min="1" step="any" placeholder="for runtime estimates">
+            </div>
+          </div>
+          <div style="margin-top:.6rem">
+            <label class="sform-label" for="pwf_router">Site router <span class="pw-optional">(optional, shown on the unit's page)</span></label>
+            <select class="sform-input" id="pwf_router"></select>
+          </div>
+
+          <div class="pw-conv-head">
+            <span class="sform-label" style="margin:0">Converter</span>
+            <button type="button" class="pw-info-btn" id="pwf_infoBtn" aria-expanded="false" aria-controls="pwf_info" title="How to set up the converter">&#9432;</button>
+          </div>
+          <div class="pw-info" id="pwf_info" hidden>
+            <p><b>Any Ethernet-to-RS485 converter works</b> if it runs as a <b>Modbus TCP gateway</b> (Modbus TCP &harr; RTU). MikroDash only needs its IP address and port; the make does not matter. Plain transparent mode (raw serial over TCP) does <b>not</b> work.</p>
+            <ul>
+              <li><b>Serial side:</b> 9600 baud, 8 data bits, no parity, 1 stop bit (9600 8N1).</li>
+              <li><b>Network side:</b> TCP server on port <b>502</b>, static IP address on the site LAN.</li>
+              <li><b>E30-485:</b> Port1 &rarr; Advance &rarr; <b>Modbus Gateway ON</b>, Data Cache OFF, Poll OFF.</li>
+              <li><b>ZLAN 5143, 5243A, 7144, 7144N2:</b> conversion protocol <b>Modbus TCP&lt;-&gt;RTU</b>; turn the <b>storage</b> Modbus gateway <b>off</b> (untick RS485 multi-host support and bus conflict detection), or it keeps polling the inverter by itself and can show old values. Keep P2P/cloud off.</li>
+              <li><b>ZLAN 7104 is not supported:</b> it has no Modbus gateway mode.</li>
+              <li><b>Several units on one converter</b> need different slave IDs, set on each unit.</li>
+              <li><b>Security:</b> Modbus has no password. Keep converters on their own VLAN or firewall them so only MikroDash reaches port 502, block the setup ports (E30: UDP 8168, ZLAN: UDP 1092), change the web passwords, and never forward Modbus to the internet.</li>
+            </ul>
+          </div>
+          <div class="sform-row">
+            <div>
+              <label class="sform-label" for="pwf_host">IP address</label>
+              <input class="sform-input" id="pwf_host" type="text" placeholder="192.168.20.83" autocomplete="off" maxlength="253">
+            </div>
+            <div class="sform-row">
+              <div>
+                <label class="sform-label" for="pwf_port">Port</label>
+                <input class="sform-input" id="pwf_port" type="number" min="1" max="65535" value="502">
+              </div>
+              <div>
+                <label class="sform-label" for="pwf_slave">Slave ID</label>
+                <input class="sform-input" id="pwf_slave" type="number" min="1" max="247" value="1">
+              </div>
+            </div>
+          </div>
+          <label class="pw-check" style="margin-top:.6rem"><input type="checkbox" id="pwf_enabled" checked> Poll this unit</label>
+          <div class="login-error pw-form-error" id="pwf_error" hidden></div>
+        </div>
+        <div class="rtr-modal-footer">
+          <button class="sbtn sbtn-danger" id="pwf_delete" type="button" hidden>Delete</button>
+          <span style="flex:1"></span>
+          <button class="sbtn sbtn-outline" type="button" data-modal-close="pwFormWrap">Cancel</button>
+          <button class="sbtn sbtn-primary" id="pwf_save" type="button">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>

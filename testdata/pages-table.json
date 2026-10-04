@@ -232,6 +232,7 @@
     "audit-trail",
     "backups",
     "devices",
+    "power-ups",
     "config-management",
     "terminal",
     "ai-agent",

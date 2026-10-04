@@ -78,6 +78,7 @@ export const PAGES: readonly Page[] = [
   { key: "audit-trail", title: "Audit Trail", path: "audit-trail" },
   { key: "backups", title: "Backups", path: "backups" },
   { key: "devices", title: "Devices", path: "devices" },
+  { key: "power-ups", title: "Power/UPS", path: "power-ups" },
   { key: "config-management", title: "Config Management", path: "config-management" },
   { key: "settings", title: "Settings", path: "settings" },
 ];

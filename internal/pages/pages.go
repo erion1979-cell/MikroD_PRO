@@ -196,6 +196,11 @@ var All = []Page{
 	{Key: "audit-trail", Title: "Audit Trail"},
 	{Key: "backups", Title: "Backups"},
 	{Key: "devices", Title: "Devices"},
+	// The Power/UPS module (docs/inverter/PLAN.md): inverters and UPSs read over
+	// Modbus TCP. NO COLLECTOR, because it is not a RouterOS page: its pollers
+	// run in internal/power whether or not the page is open, and its
+	// permission is checked per SITE rather than per router (rbac.CanPageOnSites).
+	{Key: "power-ups", Title: "Power/UPS"},
 	// Config Management. NO COLLECTOR: templates, runs and drift are read on
 	// demand, and a deploy's progress arrives on its own event.
 	{Key: "config-management", Title: "Config Management"},

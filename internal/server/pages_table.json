@@ -282,6 +282,11 @@
       "settingsKey": "pageDevices"
     },
     {
+      "key": "power-ups",
+      "title": "Power/UPS",
+      "settingsKey": null
+    },
+    {
       "key": "config-management",
       "title": "Config Management",
       "settingsKey": null

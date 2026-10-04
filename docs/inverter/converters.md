@@ -46,7 +46,7 @@ ZLAN rule: only models whose **third digit is 4** have the Modbus gateway.
 |---|---|---|---|---|
 | ZLAN5143 | 1 x RS232/485/422 | Ethernet | yes | DEF switch = start with defaults (IP 192.168.0.254) |
 | ZLAN5243A | **2** x RS232/485/422 | 2 x Ethernet (built-in switch) | yes | each serial port configured separately; 10 TCP connections |
-| ZLAN7104 | 1 x RS232/485/422 | Ethernet + Wi-Fi | **no** | transparent only: platform must send **RTU over TCP** |
+| ZLAN7104 | 1 x RS232/485/422 | Ethernet + Wi-Fi | **no** | transparent only (RTU over TCP): **not supported by MikroDash** |
 | ZLAN7144 / 7144N2 | 1 x RS232/485/422 | Ethernet + Wi-Fi | yes | N2 adds vendor P2P/N2N cloud: keep off |
 
 ### Settings for the inverter
@@ -55,7 +55,7 @@ ZLAN rule: only models whose **third digit is 4** have the Modbus gateway.
 |---|---|
 | IP mode | Static, site LAN address |
 | Work mode | TCP Server |
-| Conversion protocol (转化协议) | **Modbus TCP<->RTU** (port changes to **502** automatically). On a 7104: NONE, and use RTU over TCP on port 4196 |
+| Conversion protocol (转化协议) | **Modbus TCP<->RTU** (port changes to **502** automatically). The 7104 cannot do this and is not supported |
 | Baud / data / parity / stop | **9600 / 8 / None / 1** |
 | Flow control | None |
 | Packet interval | default (a few ms) |
