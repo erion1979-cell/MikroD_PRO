@@ -62,6 +62,7 @@
         <button class="stab" data-rtab="bandwidth">Bandwidth Usage</button>
         <button class="stab" data-rtab="alerts">Alert Events</button>
         <button class="stab" data-rtab="connectivity">Connectivity</button>
+        <button class="stab" data-rtab="power" hidden>Power/UPS</button>
         <button class="stab" data-rtab="scheduled">Scheduled</button>
       </div>
 
@@ -174,6 +175,24 @@
           <table class="bw-table">
             <thead><tr id="rptConnThead"><th>Time</th><th>Status</th></tr></thead>
             <tbody id="rptConnTbody"><tr><td colspan="2" class="rpt-empty">Select a router and date range, then click Load.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ── Power/UPS tab ──────────────────────────────────────────────
+           One unit over the date range. Its own unit picker: a unit belongs
+           to a site, not to the router chosen above (reports-power.ts). -->
+      <div id="rtab-power" class="rtab-panel">
+        <div class="rpt-export-row">
+          <select id="rptPowerUnit" class="rpt-select" title="Power/UPS unit"></select>
+          <a id="rptPowerCsvLink" class="sbtn sbtn-ghost" href="#" download style="display:none">Export CSV</a>
+          <a id="rptPowerEventsCsvLink" class="sbtn sbtn-ghost" href="#" download style="display:none">Events CSV</a>
+        </div>
+        <div class="rpt-stat-row" id="rptPowerStats"></div>
+        <div class="bw-table-wrap">
+          <table class="bw-table">
+            <thead><tr id="rptPowerThead"><th>Began</th><th>Event</th><th>Ended</th><th style="text-align:right">Lasted</th></tr></thead>
+            <tbody id="rptPowerTbody"><tr><td colspan="4" class="rpt-empty">Choose a unit and a date range.</td></tr></tbody>
           </table>
         </div>
       </div>

@@ -48,6 +48,7 @@ func (s *Server) registerPower(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/power/units/{id}/events", s.powerEvents)
 	mux.HandleFunc("GET /api/power/units/{id}/history", s.powerHistory)
 	mux.HandleFunc("GET /api/power/units/{id}/export.csv", s.powerExport)
+	mux.HandleFunc("GET /api/power/units/{id}/report", s.powerReport)
 }
 
 // powerMay answers whether this session may use the page at `access` for a
@@ -596,13 +597,19 @@ func (s *Server) powerExport(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// A named window (the unit page's tabs), or ?from=&to= (the Reports tab).
 	rangeKey := r.URL.Query().Get("range")
-	rg, ok := powerRanges[rangeKey]
-	if !ok {
-		rangeKey, rg = "24h", powerRanges["24h"]
+	var from, to int64
+	if rg, named := powerRanges[rangeKey]; named {
+		to = time.Now().UnixMilli()
+		from = to - rg.span.Milliseconds()
+	} else if f, t, given := powerWindow(r); given && r.URL.Query().Get("from") != "" {
+		from, to, rangeKey = f, t, "range"
+	} else {
+		rangeKey = "24h"
+		to = time.Now().UnixMilli()
+		from = to - powerRanges["24h"].span.Milliseconds()
 	}
-	to := time.Now().UnixMilli()
-	from := to - rg.span.Milliseconds()
 	tz := s.displayTZ()
 
 	var columns []string

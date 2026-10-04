@@ -293,3 +293,36 @@ func (d *DB) PowerEventsIn(unitID string, from, to int64) ([]PowerEvent, error) 
 	}
 	return out, rows.Err()
 }
+
+// PowerStats is each measure's mean, lowest and highest over `from` to `to`:
+// the mean of the minute averages, and the extremes of the minute extremes.
+// A measure with no rows is absent.
+func (d *DB) PowerStats(unitID string, keys []string, from, to int64) (map[string]PowerPoint, error) {
+	out := map[string]PowerPoint{}
+	if len(keys) == 0 {
+		return out, nil
+	}
+	args := []any{unitID, from, to}
+	marks := make([]string, len(keys))
+	for i, k := range keys {
+		marks[i] = "?"
+		args = append(args, k)
+	}
+	rows, err := d.sql.Query(`SELECT key, AVG(avg), MIN(min), MAX(max) FROM power_samples
+	    WHERE unit_id = ? AND ts >= ? AND ts <= ? AND key IN (`+strings.Join(marks, ",")+`)
+	    GROUP BY key`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var k string
+		var p PowerPoint
+		if err := rows.Scan(&k, &p.Avg, &p.Min, &p.Max); err != nil {
+			return nil, err
+		}
+		p.TS = from
+		out[k] = p
+	}
+	return out, rows.Err()
+}

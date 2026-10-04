@@ -3,6 +3,7 @@ package server
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -419,5 +420,11 @@ func TestPowerExportWritesHistoryAndEventsAsCSV(t *testing.T) {
 	}
 	if !strings.Contains(lines[1], ",,,event,3,'=HYPERLINK(1),true,false") {
 		t.Errorf("event row %q: an open event has no end, and the formula must be defused", lines[1])
+	}
+	// The Reports tab's window: only the first minute falls inside it.
+	disp, body = get(fmt.Sprintf("from=%d&to=%d", now-150_000, now-90_000))
+	if lines = strings.Split(body, "\n"); len(lines) != 2 || !strings.Contains(lines[1], ",229.5,") ||
+		!strings.Contains(disp, "-history-range.csv") {
+		t.Errorf("from/to export %q:\n%s", disp, body)
 	}
 }

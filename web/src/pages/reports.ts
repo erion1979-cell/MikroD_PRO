@@ -27,6 +27,7 @@ import {
 import { renderAlerts, wireAlertAck, type AlertRow } from './reports-alerts';
 import { wireCapacityToggle } from './reports-charts';
 import { loadSchedules, wireScheduleActions, wireScheduleForm } from './reports-schedules';
+import { loadPowerUnits, loadPowerReport } from './reports-power';
 
 
 /** The saved preset survives a reload, so a range does not have to be re-picked. */
@@ -382,19 +383,21 @@ export function ifaceExtra(selectId: string): string {
 }
 
 export function loadReports(): void {
-  const routerSel = el<HTMLSelectElement>('rptRouter');
-  if (!routerSel || !routerSel.value) return;
-
   // THE To FIELD FOLLOWS THE CLOCK UNTIL SOMEBODY TOUCHES IT. Without this a
   // page left open overnight keeps reporting up to the moment it was loaded,
   // which looks like the router stopped recording.
   const toInput = el<HTMLInputElement>('rptTo');
   if (toInput && !toIsManual) toInput.value = dtVal(new Date());
-
-  const routerId = routerSel.value;
   const fromInput = el<HTMLInputElement>('rptFrom');
   const from = dateToTs(fromInput ? fromInput.value : '', false);
   const to = dateToTs(toInput ? toInput.value : '', true);
+
+  // The Power/UPS tab needs no router: a unit belongs to a site.
+  loadPowerReport(from, to);
+
+  const routerSel = el<HTMLSelectElement>('rptRouter');
+  if (!routerSel || !routerSel.value) return;
+  const routerId = routerSel.value;
   const aggSel = el<HTMLSelectElement>('rptAggregate');
   const agg = aggSel ? aggSel.value : '';
   const q = 'routerId=' + encodeURIComponent(routerId) + '&from=' + from + '&to=' + to +
@@ -552,6 +555,13 @@ export function mountReports(routers: ReportRouter[] = []): void {
   el('rptRouter')?.addEventListener('change', () => loadReports());
   el('rptTrafficIface')?.addEventListener('change', () => reloadIface('traffic'));
   el('rptBwIface')?.addEventListener('change', () => reloadIface('bandwidth'));
+  el('rptPowerUnit')?.addEventListener('change', () => loadReports());
+
+  // The unit list arrives after the first load below, so its report is
+  // fetched once the list is in.
+  void loadPowerUnits().then(() => loadPowerReport(
+    dateToTs(el<HTMLInputElement>('rptFrom')?.value || '', false),
+    dateToTs(el<HTMLInputElement>('rptTo')?.value || '', true)));
 
   // LOAD ONCE ON MOUNT, but only if there is a router to load for. The live page
   // auto-loads when Reports becomes active; doing it here means the first visit

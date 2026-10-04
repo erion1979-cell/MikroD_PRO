@@ -7,6 +7,7 @@
  * - Durations and ages read the way the mockups show them.
  * - Each kind of event reads as a sentence with the right colour, and an open
  *   one says how long it has lasted so far.
+ * - The Reports tab's summary: a window with no polls says "-", not 0%.
  */
 
 import fs from 'node:fs';
@@ -20,6 +21,7 @@ const ENTRY = path.join(ROOT, 'testdata', '.power-ups-entry.ts');
 fs.writeFileSync(ENTRY, [
   "export { statusOf, ago, duration, eventLine } from '../web/src/pages/power-ups.js';",
   "export { withGaps } from '../web/src/pages/power-ups-chart.js';",
+  "export { powerStats } from '../web/src/pages/reports-power.js';",
 ].join('\n') + '\n');
 const OUT = path.join(ROOT, 'testdata', '.power-ups.cjs');
 execFileSync(path.join(ROOT, 'web', 'node_modules', '.bin', 'esbuild'),
@@ -85,5 +87,16 @@ assert.strictEqual(m.withGaps([pt(0, 1), pt(400_000, 1)], 300_000).length, 2,
   'a slightly late interval (under one and a half) broke the line');
 assert.deepStrictEqual([g[0].min, g[0].max], [229, 231], 'the band is not carried');
 
+// ── THE REPORTS TAB'S SUMMARY ───────────────────────────────────────────────
+const rep = (over: Record<string, unknown>) => ({ from: 0, to: 1, outages: 2, outageMs: 5_400_000,
+  longestMs: 3_600_000, faults: 1, notResponding: 0, availability: 99.5, events: [],
+  stats: { input_v: { avg: 228, min: 180.4, max: 241.6 }, battery_pct: { avg: 80, min: 34, max: 100 } }, ...over });
+const cards = new Map(m.powerStats(rep({})).map(([v, l]: [string, string]) => [l, v]));
+assert.deepStrictEqual([cards.get('Mains Outages'), cards.get('Time on Battery'), cards.get('Longest Outage'),
+  cards.get('Answered Polls'), cards.get('Input Voltage'), cards.get('Lowest Battery'), cards.get('Peak Load')],
+['2', '1h 30m', '1h 0m', '99.5%', '180–242 V', '34%', '-'], 'summary cards: ' + JSON.stringify([...cards]));
+assert.strictEqual(new Map(m.powerStats(rep({ availability: -1 })).map(([v, l]: [string, string]) => [l, v]))
+  .get('Answered Polls'), '-', 'a window with no polls reads as a percentage');
+
 fs.rmSync(OUT, { force: true });
-say('# power-ups: status, durations, event lines and chart gaps pinned');
+say('# power-ups: status, durations, event lines, chart gaps and the report summary pinned');

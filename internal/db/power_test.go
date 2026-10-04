@@ -259,3 +259,28 @@ func TestPowerEventsInAWindowIncludeTheOnesOverlappingIt(t *testing.T) {
 		t.Error("no minutes is nil, not an empty list")
 	}
 }
+
+func TestPowerStatsAreTheMeanOfAveragesAndTheExtremesOfExtremes(t *testing.T) {
+	d := openTest(t, t.TempDir())
+	u := newPowerUnit(t, d)
+	for i, s := range []PowerStat{
+		{Key: "input_v", Avg: 230, Min: 228, Max: 232},
+		{Key: "input_v", Avg: 220, Min: 180, Max: 225},
+		{Key: "input_v", Avg: 0, Min: 0, Max: 0}, // outside the window
+	} {
+		if err := d.RecordPowerMinute(u.ID, int64(i+1)*60_000, 12, 12, 100, []PowerStat{s,
+			{Key: "load_pct", Avg: 40, Min: 30, Max: 50}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := d.PowerStats(u.ID, []string{"input_v", "battery_pct"}, 60_000, 120_000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("stats %v: want input_v only (load_pct not asked, battery_pct has no rows)", got)
+	}
+	if p := got["input_v"]; p.Avg != 225 || p.Min != 180 || p.Max != 232 {
+		t.Errorf("input_v %+v, want avg 225, min 180, max 232", p)
+	}
+}
