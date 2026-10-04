@@ -146,6 +146,10 @@ var All = []Card{
 	// the rates), and gated on the WAN page, whose data it draws. 12 by 5 is the
 	// operator's default (2026-09-22).
 	{ID: "dc-card-wanflow", Label: "WAN Flow", Room: "wan", Page: "wan", X: 1, Y: 1, W: 12, H: 5},
+	// Power/UPS (docs/inverter/PLAN.md): the units at the selected router's
+	// site. Fed by the Power/UPS pollers' live updates rather than a collector
+	// (internal/server/power_live.go), and gated on the Power/UPS page.
+	{ID: "dc-card-power", Label: "Power/UPS", Room: "power", Page: "power-ups", X: 1, Y: 1, W: 8, H: 5},
 }
 
 // PageFor is the page a card room borrows its data from, and therefore the

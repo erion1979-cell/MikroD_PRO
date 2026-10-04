@@ -8,18 +8,31 @@ package server
 
 import "mikrodash/internal/power"
 
-// powerWatch adds or removes a socket from the page's viewers.
-func (s *Server) powerWatch(cn *conn, on bool) {
+// powerWatch adds or removes one reason a socket wants updates: "page" for the
+// Power/UPS page, "card" for its Dashboard card. A socket is sent updates while
+// it has any reason, so leaving the page does not silence a card still shown,
+// and a closed socket (reason "") drops them all.
+func (s *Server) powerWatch(cn *conn, reason string, on bool) {
 	s.power.mu.Lock()
 	defer s.power.mu.Unlock()
 	if !on {
-		delete(s.power.watchers, cn)
+		if reason == "" {
+			delete(s.power.watchers, cn)
+			return
+		}
+		delete(s.power.watchers[cn], reason)
+		if len(s.power.watchers[cn]) == 0 {
+			delete(s.power.watchers, cn)
+		}
 		return
 	}
 	if s.power.watchers == nil {
-		s.power.watchers = map[*conn]bool{}
+		s.power.watchers = map[*conn]map[string]bool{}
 	}
-	s.power.watchers[cn] = true
+	if s.power.watchers[cn] == nil {
+		s.power.watchers[cn] = map[string]bool{}
+	}
+	s.power.watchers[cn][reason] = true
 }
 
 // powerPush is the pollers' State hook.

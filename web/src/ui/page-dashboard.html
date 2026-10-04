@@ -532,6 +532,25 @@
         </div>
       </div>
 
+      <!-- dc-card-power: Power/UPS ──────────────────────────────────────────
+           The units at the selected router's site, or every unit the viewer may
+           read when none is there: their status and the four readings that
+           matter in an outage. Fed by `power:state`; see
+           web/src/pages/dashboard-card-power.ts. -->
+      <div id="dc-card-power" class="dash-card">
+        <div class="dash-drag-handle"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="15" x2="16" y2="15"/></svg></div>
+        <div class="dash-resize n" data-dir="n"></div><div class="dash-resize s" data-dir="s"></div><div class="dash-resize e" data-dir="e"></div><div class="dash-resize w" data-dir="w"></div>
+        <div class="dash-resize ne" data-dir="ne"></div><div class="dash-resize nw" data-dir="nw"></div><div class="dash-resize se" data-dir="se"></div><div class="dash-resize sw" data-dir="sw"></div>
+        <button class="dash-remove-btn" data-card="dc-card-power" type="button" title="Remove card">&#x2715;</button>
+        <div class="card">
+          <div class="card-header d-flex align-items-center justify-content-between">
+            <h3 class="card-title mb-0">Power/UPS <span class="muted-note" id="dc-pwScope"></span></h3>
+            <a href="#" class="sec-open" id="dc-pwOpen">Open ›</a>
+          </div>
+          <div class="card-body dc-pw-body" id="dc-pwBody"><div class="muted-note">Loading…</div></div>
+        </div>
+      </div>
+
       <!-- dc-card-signal: Signal Health -->
       <div id="dc-card-signal" class="dash-card">
         <div class="dash-drag-handle"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="15" x2="16" y2="15"/></svg></div>

@@ -3839,3 +3839,9 @@
     .pw-chart-title{font-size:.72rem;color:var(--text-muted);margin:.4rem 0 .15rem}
     .pw-chart{position:relative;height:170px}
     #pwRange .stab{padding:.15rem .5rem;font-size:.72rem;text-transform:none;letter-spacing:0}
+    /* The Dashboard's Power/UPS card (dashboard-card-power.ts). */
+    .dc-pw-body{display:flex;flex-direction:column;gap:.35rem;overflow-y:auto;font-size:.82rem}
+    .dc-pw-row{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;padding:.2rem 0;border-bottom:1px solid var(--border)}
+    .dc-pw-row:last-child{border-bottom:0}
+    .dc-pw-name{font-weight:600;min-width:5rem}
+    .dc-pw-vals{margin-left:auto;display:flex;gap:.7rem;font-family:var(--font-mono);font-size:.75rem;color:var(--text-muted)}

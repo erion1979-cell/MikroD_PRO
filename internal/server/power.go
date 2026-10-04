@@ -38,8 +38,9 @@ type powerState struct {
 	// update is checked against before it is sent (power_live.go) and what a
 	// notification names (power_notify.go).
 	units map[string]db.PowerUnit
-	// watchers is every socket with the page open.
-	watchers map[*conn]bool
+	// watchers is every socket wanting live updates, with why: the page, the
+	// Dashboard card, or both (power_live.go).
+	watchers map[*conn]map[string]bool
 	// applied is the settings the pollers run with, so a save that changes
 	// none of them restarts nothing.
 	applied power.Settings

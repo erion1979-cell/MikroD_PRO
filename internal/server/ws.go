@@ -287,7 +287,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	// is what makes a closed tab indistinguishable from a blur.
 	cn.devicesBlur()
 	// A closed tab sends no blur: the Power/UPS page's updates stop here too.
-	cn.srv.powerWatch(cn, false)
+	cn.srv.powerWatch(cn, "", false)
 	// The device modal's stream, which a closed tab never says goodbye to.
 	cn.unpeek()
 	// The diagnostics ticker too: it is per socket, so a closing connection that
@@ -1038,7 +1038,7 @@ func (cn *conn) pageFocus(page string) {
 	// units belong to sites, and each update is checked against the unit's
 	// site as it is sent (power_live.go).
 	if page == powerPage {
-		cn.srv.powerWatch(cn, true)
+		cn.srv.powerWatch(cn, "page", true)
 	}
 
 	if cn.routerID == "" {
@@ -1437,7 +1437,7 @@ func (cn *conn) pageBlur(page string) {
 		cn.unpeek()
 	}
 	if page == powerPage {
-		cn.srv.powerWatch(cn, false)
+		cn.srv.powerWatch(cn, "page", false)
 	}
 	// FORGOTTEN HERE TOO, or a later `router:select` would replay a page this
 	// viewer has left and re-wake its collectors. Only when it is the page we

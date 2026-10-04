@@ -34,6 +34,7 @@ import (
 	"mikrodash/internal/db"
 	"mikrodash/internal/power"
 	"mikrodash/internal/power/model"
+	"mikrodash/internal/store"
 )
 
 const powerPage = "power-ups"
@@ -217,6 +218,22 @@ func (s *Server) powerList(w http.ResponseWriter, r *http.Request) {
 		}
 		units = append(units, v)
 	}
+	scope := s.powerRouterSites(r.URL.Query().Get("router"))
+	if len(scope) > 0 {
+		var here []powerUnitView
+		for _, v := range units {
+			if scope[siteOf(v.PowerUnit)] {
+				here = append(here, v)
+			}
+		}
+		// A router whose sites hold no unit shows everything rather than an
+		// empty card; `scoped` tells the card which it is showing.
+		if len(here) > 0 {
+			units = here
+		} else {
+			scope = nil
+		}
+	}
 
 	models := []powerModelView{}
 	all, _ := model.All()
@@ -243,7 +260,27 @@ func (s *Server) powerList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, map[string]any{"ok": true, "units": units, "models": models,
-		"writableSites": writable, "polling": s.powerPolling()})
+		"writableSites": writable, "polling": s.powerPolling(), "scoped": len(scope) > 0})
+}
+
+// powerRouterSites is the sites of the router `?router=` names, for the
+// Dashboard card's "this site" view. Only narrows what the caller may already
+// read, so it needs no permission of its own.
+func (s *Server) powerRouterSites(routerID string) map[string]bool {
+	if routerID == "" || s.store == nil {
+		return nil
+	}
+	all, _ := s.store.Routers()
+	for _, rt := range all {
+		if rt.ID == routerID {
+			out := map[string]bool{}
+			for _, id := range store.RouterSiteIDs(rt) {
+				out[id] = true
+			}
+			return out
+		}
+	}
+	return nil
 }
 
 // powerPolling reports whether the pollers run in this process at all, so the

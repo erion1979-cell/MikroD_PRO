@@ -25,7 +25,7 @@ import { drawPowerCharts, stopPowerCharts, type HistPoint } from './power-ups-ch
 type Cond = PowerCond;
 type UnitState = PowerState;
 
-interface Unit {
+export interface Unit {
   id: string;
   name: string;
   siteId: string | null;
@@ -52,8 +52,8 @@ interface PowerList {
 }
 
 /** The status every view agrees on: one key, one label, one pill colour. */
-type Status = 'mains' | 'battery' | 'fault' | 'off' | 'down' | 'waiting' | 'idle';
-const STATUS: Record<Status, { label: string; pill: string; rank: number }> = {
+export type Status = 'mains' | 'battery' | 'fault' | 'off' | 'down' | 'waiting' | 'idle';
+export const STATUS: Record<Status, { label: string; pill: string; rank: number }> = {
   fault: { label: 'Fault', pill: 'hs-stale', rank: 0 },
   off: { label: 'Output off', pill: 'hs-stale', rank: 1 },
   down: { label: 'Not responding', pill: 'hs-never', rank: 2 },
@@ -72,7 +72,7 @@ export function statusOf(u: Unit): Status {
   return 'waiting';
 }
 
-function pill(s: Status): string {
+export function pill(s: Status): string {
   return `<span class="vpn-hs-badge ${STATUS[s].pill}">${STATUS[s].label}</span>`;
 }
 

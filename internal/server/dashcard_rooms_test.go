@@ -94,7 +94,11 @@ func TestEveryCardRoomIsEmittedTo(t *testing.T) {
 		// `secscore` joined 2026-09-19: the Security Score card is fed by the
 		// scans internal/server/secscan.go runs (runClaimedScan broadcasts to its
 		// room), not by a collector.
-		if k == "diagnostics" || k == "agent" || k == "secscore" {
+		//
+		// `power` joined 2026-10-04: the Power/UPS card is fed by the pollers'
+		// `power:state`, sent per socket while the card is on the grid
+		// (power_live.go), never to a room.
+		if k == "diagnostics" || k == "agent" || k == "secscore" || k == "power" {
 			continue
 		}
 		if room := dashcards.EmitRoom(k); !emitted[room] {

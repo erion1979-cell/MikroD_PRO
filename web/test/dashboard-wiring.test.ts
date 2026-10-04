@@ -94,6 +94,10 @@ const CARDS = {
   // WAN Flow: the WAN page's Sankey on the Dashboard, fed by the WAN collector
   // through the card's own room, and cleared on a router switch.
   'dashboard-card-wanflow': { event: 'wan:update', also: ['router:switched'] },
+  // Power/UPS (docs/inverter/PLAN.md): its units come from GET /api/power on each
+  // router switch, and `power:state`, sent by the server while the card is on
+  // the grid, keeps them current. A unit it has not listed makes it ask again.
+  'dashboard-card-power': { event: 'power:state', also: ['router:switched'] },
   'dashboard-card-connlists': 'conn:update',
   'dashboard-card-logs': { event: 'logs:new', also: ['logs:history'] },
   // Shares traffic:update with the chart, and owns two more events of its own.
@@ -318,6 +322,8 @@ const PROBE = {
     wans: [{ name: 'ether1', type: 'ether', isTunnel: false, state: 'internet', manual: false, since: '', running: true,
       address: '', isPublic: null, gateway: '', routeDistance: '1', routeActive: true, hasDefaultRoute: true,
       rxMbps: 1, txMbps: 1, rxBytes: null, txBytes: null, dhcp: null }] },
+  'power:state': { unitId: '__probe__', online: true, hasReading: false, mode: '', values: {}, flags: {}, raw: {},
+    apparentVa: null, eventCode: 0, eventText: '', lastOk: 0, replyMs: 0, polls: 1, answered: 0, lastError: '', open: [] },
   'secscore:state': { routerId: '', has: true, score: 72, issues: 3, critical: 0, high: 1, medium: 2, low: 0,
     passed: 30, checks: 46, scannedAt: 1, running: false, done: 0, total: 37, code: '', message: '' },
 };

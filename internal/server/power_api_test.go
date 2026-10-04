@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -290,7 +291,7 @@ func TestPowerLiveUpdatesFollowSitePermission(t *testing.T) {
 	if got := received(); len(got) != 0 {
 		t.Errorf("a socket not on the page received %v", got)
 	}
-	srv.powerWatch(cn, true)
+	srv.powerWatch(cn, "page", true)
 	push()
 	if got := strings.Join(received(), ","); got != "u1" {
 		t.Errorf("a site-1 viewer received %q, want only u1", got)
@@ -302,7 +303,7 @@ func TestPowerLiveUpdatesFollowSitePermission(t *testing.T) {
 		t.Errorf("after the grant was revoked the viewer received %v", got)
 	}
 	p.grant("pw-view@global")
-	srv.powerWatch(cn, false)
+	srv.powerWatch(cn, "page", false)
 	push()
 	if got := received(); len(got) != 0 {
 		t.Errorf("after leaving the page the viewer received %v", got)
@@ -327,5 +328,41 @@ func TestSavedPowerSettingsReachThePollers(t *testing.T) {
 		if p.srv.power.applied.Interval != 10*time.Second {
 			t.Errorf("a 1 s interval reached the pollers: %v", p.srv.power.applied.Interval)
 		}
+	}
+}
+
+// THE DASHBOARD CARD'S "THIS SITE": ?router= narrows the list to the units at
+// that router's sites, and falls back to every unit when none is there.
+func TestPowerListNarrowsToARoutersSites(t *testing.T) {
+	p := newPowerAPI(t)
+	p.grant("pw-view@global")
+	routers := `[{"id":"r-A","label":"A","host":"198.51.100.1","siteIds":["site-1"]},
+	             {"id":"r-B","label":"B","host":"198.51.100.2","siteIds":["site-9"]}]`
+	if err := os.WriteFile(filepath.Join(p.srv.store.Dir, "routers.json"), []byte(routers), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for i, site := range []string{"site-1", "site-2"} {
+		s := site
+		if _, err := p.d.CreatePowerUnit(db.PowerUnit{Name: "INV-" + site, SiteID: &s, Model: "powerguard/modbus-v1.1",
+			Host: "198.51.100.10", Port: 502, SlaveID: i + 1, Enabled: true}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	names := func(path string) (string, bool) {
+		_, body := p.do("GET", path, "")
+		var out []string
+		for _, u := range body["units"].([]any) {
+			out = append(out, u.(map[string]any)["name"].(string))
+		}
+		return strings.Join(out, ","), body["scoped"] == true
+	}
+	if got, scoped := names("/api/power?router=r-A"); got != "INV-site-1" || !scoped {
+		t.Errorf("router A: %q scoped=%v, want only its site's unit", got, scoped)
+	}
+	if got, scoped := names("/api/power?router=r-B"); got != "INV-site-1,INV-site-2" || scoped {
+		t.Errorf("router B (no units at its site): %q scoped=%v, want all", got, scoped)
+	}
+	if got, scoped := names("/api/power"); got != "INV-site-1,INV-site-2" || scoped {
+		t.Errorf("no router: %q scoped=%v", got, scoped)
 	}
 }

@@ -133,6 +133,12 @@ func (cn *conn) dashCardFocus(key string) {
 	if key == "secscore" {
 		cn.secScoreFocus()
 	}
+	// THE FOURTH: the Power/UPS card, fed by the pollers' live updates, which
+	// go to a socket only while something on it wants them (power_live.go).
+	// Gated on the Power/UPS page above; each update is checked per unit site.
+	if key == "power" {
+		cn.srv.powerWatch(cn, "card", true)
+	}
 }
 
 func (cn *conn) dashCardBlur(key string) {
@@ -154,6 +160,9 @@ func (cn *conn) dashCardBlur(key string) {
 	}
 	if key == "agent" {
 		cn.agentBlur()
+	}
+	if key == "power" {
+		cn.srv.powerWatch(cn, "card", false)
 	}
 	// ── PHASE 4.2b: A CARD BLUR NOW STOPS SOMETHING ───────────────────────
 	//
