@@ -173,6 +173,13 @@ func TestPowerUnitsAreGatedBySite(t *testing.T) {
 	if code, body := p.do("GET", "/api/power/units/"+mine+"/events", ""); code != http.StatusOK || body["events"] == nil {
 		t.Errorf("a viewer's events: %d %v", code, body)
 	}
+	if code, body := p.do("GET", "/api/power/units/"+mine+"/history?range=7d", ""); code != http.StatusOK ||
+		body["bucketMs"] != float64(30*60_000) || body["series"].(map[string]any)["input_v"] == nil {
+		t.Errorf("a viewer's history: %d %v", code, body)
+	}
+	if code, _ := p.do("GET", "/api/power/units/"+other.ID+"/history", ""); code != http.StatusNotFound {
+		t.Errorf("another site's history: %d, want 404", code)
+	}
 
 	// A global grant reaches every site, and units with none.
 	p.grant("pw-view@global")

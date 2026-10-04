@@ -17,8 +17,10 @@ import { execFileSync } from 'node:child_process';
 const say = console.log.bind(console);
 const ROOT = process.env.MIKRODASH_ROOT || path.join(__dirname, '..', '..');
 const ENTRY = path.join(ROOT, 'testdata', '.power-ups-entry.ts');
-fs.writeFileSync(ENTRY,
-  "export { statusOf, ago, duration, eventLine } from '../web/src/pages/power-ups.js';\n");
+fs.writeFileSync(ENTRY, [
+  "export { statusOf, ago, duration, eventLine } from '../web/src/pages/power-ups.js';",
+  "export { withGaps } from '../web/src/pages/power-ups-chart.js';",
+].join('\n') + '\n');
 const OUT = path.join(ROOT, 'testdata', '.power-ups.cjs');
 execFileSync(path.join(ROOT, 'web', 'node_modules', '.bin', 'esbuild'),
   [ENTRY, '--bundle', '--format=cjs', '--platform=node', '--outfile=' + OUT, '--log-level=warning'],
@@ -73,5 +75,15 @@ l = m.eventLine(ev({ kind: 'not_responding', initial: true }), now);
 assert.ok(l.sub.includes('already so when monitoring began') && l.tone === 'idle',
   'a condition already true at start: ' + JSON.stringify(l));
 
+// ── A MISSING INTERVAL BREAKS THE LINE ──────────────────────────────────────
+const pt = (t: number, v: number) => ({ t, avg: v, min: v - 1, max: v + 1 });
+const g = m.withGaps([pt(0, 230), pt(300_000, 229), pt(1_500_000, 231), pt(1_800_000, 230)], 300_000);
+assert.deepStrictEqual(g.map((p: { x: number; y: number | null }) => [p.x, p.y]),
+  [[0, 230], [300_000, 229], [600_000, null], [1_500_000, 231], [1_800_000, 230]],
+  'a gap of four intervals was bridged: ' + JSON.stringify(g));
+assert.strictEqual(m.withGaps([pt(0, 1), pt(400_000, 1)], 300_000).length, 2,
+  'a slightly late interval (under one and a half) broke the line');
+assert.deepStrictEqual([g[0].min, g[0].max], [229, 231], 'the band is not carried');
+
 fs.rmSync(OUT, { force: true });
-say('# power-ups: status, durations and event lines pinned');
+say('# power-ups: status, durations, event lines and chart gaps pinned');

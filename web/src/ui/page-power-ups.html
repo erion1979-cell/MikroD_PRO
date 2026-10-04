@@ -71,8 +71,22 @@
               <div class="pw-card"><div class="pw-card-title">Load</div><div id="pwLoad"></div></div>
               <div class="pw-card"><div class="pw-card-title">Temperature</div><div id="pwTemp"></div></div>
               <div class="pw-card pw-wide" id="pwHistoryCard">
-                <div class="pw-card-title">History</div>
-                <div id="pwHistory" class="muted-note">History charts arrive in the next update.</div>
+                <div class="pw-card-title">History
+                  <span class="stab-bar" id="pwRange" role="tablist" aria-label="History window">
+                    <button class="stab active" type="button" role="tab" aria-selected="true" data-pwrange="24h">24 h</button>
+                    <button class="stab" type="button" role="tab" aria-selected="false" data-pwrange="7d">7 d</button>
+                    <button class="stab" type="button" role="tab" aria-selected="false" data-pwrange="30d">30 d</button>
+                  </span>
+                </div>
+                <div class="muted-note" id="pwHistoryNote" hidden></div>
+                <!-- Two charts, never one with two axes: volts and percent are
+                     different scales. The band behind each line is the lowest
+                     and highest reading in each interval, so a dip shorter than
+                     one interval still shows. -->
+                <div class="pw-chart-title">Voltage</div>
+                <div class="pw-chart"><canvas id="pwChartV" aria-label="Input and output voltage over time" role="img"></canvas></div>
+                <div class="pw-chart-title">Battery and load</div>
+                <div class="pw-chart"><canvas id="pwChartP" aria-label="Battery and load percentage over time" role="img"></canvas></div>
               </div>
               <div class="pw-card">
                 <div class="pw-card-title">Events</div>

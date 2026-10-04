@@ -182,3 +182,43 @@ func TestAnOpenEventIsNotOpenedTwiceAndClosesOnce(t *testing.T) {
 		t.Errorf("the closed one %+v", ended)
 	}
 }
+
+func TestPowerHistoryFoldsMinutesIntoBuckets(t *testing.T) {
+	d := openTest(t, t.TempDir())
+	u := newPowerUnit(t, d)
+	// Twenty minutes of input voltage; a dip to 0 V in minute 13.
+	for m := int64(0); m < 20; m++ {
+		mn, av := 228.0, 230.0
+		if m == 13 {
+			mn, av = 0, 200
+		}
+		if err := d.RecordPowerMinute(u.ID, m*60_000, 12, 12, 100, []PowerStat{
+			{Key: "input_v", Avg: av, Min: mn, Max: 232},
+			{Key: "load_pct", Avg: 40, Min: 40, Max: 40},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h, err := d.PowerHistory(u.ID, []string{"input_v", "battery_pct"}, 0, 19*60_000, 600_000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := h["input_v"]
+	if len(in) != 2 || in[0].TS != 0 || in[1].TS != 600_000 {
+		t.Fatalf("input_v buckets %+v, want two ten-minute buckets", in)
+	}
+	if in[0].Min != 228 || in[1].Min != 0 || in[1].Max != 232 || in[1].Avg != 227 {
+		t.Errorf("buckets %+v: the dip must survive as the second bucket's minimum, avg (9x230+200)/10", in)
+	}
+	if _, asked := h["load_pct"]; asked {
+		t.Error("a measure not asked for was returned")
+	}
+	if b, ok := h["battery_pct"]; !ok || b == nil || len(b) != 0 {
+		t.Errorf("a measure with no rows is %v, want an empty list", b)
+	}
+	// The window bounds hold.
+	h, _ = d.PowerHistory(u.ID, []string{"input_v"}, 600_000, 19*60_000, 600_000)
+	if len(h["input_v"]) != 1 {
+		t.Errorf("a window from minute 10 returned %d buckets", len(h["input_v"]))
+	}
+}

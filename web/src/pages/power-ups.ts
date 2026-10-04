@@ -20,6 +20,7 @@ import { el, esc, renderSortHeader, sortRows, type SortState } from '../dom';
 import { fmtTs } from '../timefmt';
 import type { Socket } from '../socket';
 import type { PowerCond, PowerState } from '../gen/payloads';
+import { drawPowerCharts, stopPowerCharts, type HistPoint } from './power-ups-chart';
 
 type Cond = PowerCond;
 type UnitState = PowerState;
@@ -154,6 +155,8 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
   let routers: { id: string; label: string }[] = [];
   let filter: Status | 'all' | 'down' = 'all';
   let openId = '';
+  let range = '24h';
+  let historyAt = 0;
   const sort: SortState = { col: 'site', dir: 'asc' };
 
   const siteName = (id: string | null): string => (id && sites[id]) || (id ? 'Unknown site' : 'No site');
@@ -285,12 +288,48 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
     openId = id;
     draw();
     void loadEvents();
+    void loadHistory();
   }
 
   el('pwBack')?.addEventListener('click', () => {
     openId = '';
+    stopPowerCharts();
     draw();
   });
+
+  async function loadHistory(): Promise<void> {
+    const id = openId;
+    if (!id) return;
+    historyAt = Date.now();
+    const note = el('pwHistoryNote');
+    try {
+      const body = await api<{ series: Record<string, HistPoint[]>; bucketMs: number; from: number; to: number }>(
+        '/api/power/units/' + encodeURIComponent(id) + '/history?range=' + range);
+      if (id !== openId) return;
+      const empty = Object.values(body.series).every((pts) => !pts.length);
+      if (note) {
+        note.hidden = !empty;
+        note.textContent = 'No history for this window yet. History is recorded once a minute while ' +
+          'MikroDash runs with -history (the Docker image does).';
+      }
+      drawPowerCharts(body.series, body.bucketMs, body.to - body.from);
+    } catch (e) {
+      if (note) {
+        note.hidden = false;
+        note.textContent = (e as Error).message;
+      }
+    }
+  }
+
+  document.querySelectorAll('#pwRange [data-pwrange]').forEach((b) => b.addEventListener('click', () => {
+    range = b.getAttribute('data-pwrange') || '24h';
+    document.querySelectorAll('#pwRange [data-pwrange]').forEach((x) => {
+      const on = x === b;
+      x.classList.toggle('active', on);
+      x.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    void loadHistory();
+  }));
 
   async function loadEvents(): Promise<void> {
     const id = openId;
@@ -515,10 +554,18 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
     if (!isVisible('power-ups')) return;
     draw();
     if (openId === u.id && before !== st.open.map((c) => c.kind + c.code).join()) void loadEvents();
+    // A history row is written once a minute, so the charts are re-read at
+    // most that often, and only on an update for the unit on screen.
+    if (openId === u.id && Date.now() - historyAt > 60_000) void loadHistory();
   });
 
   document.addEventListener('mikrodash:pagechange', (e) => {
-    if ((e as CustomEvent).detail === 'power-ups') void load();
+    if ((e as CustomEvent).detail === 'power-ups') {
+      void load();
+      if (openId) void loadHistory();
+    } else {
+      stopPowerCharts();
+    }
   });
   if (isVisible('power-ups')) void load();
 }

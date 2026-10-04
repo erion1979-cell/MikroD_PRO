@@ -28,6 +28,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"mikrodash/internal/audit"
 	"mikrodash/internal/db"
@@ -43,6 +44,7 @@ func (s *Server) registerPower(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/power/units/{id}", s.powerUpdate)
 	mux.HandleFunc("DELETE /api/power/units/{id}", s.powerDelete)
 	mux.HandleFunc("GET /api/power/units/{id}/events", s.powerEvents)
+	mux.HandleFunc("GET /api/power/units/{id}/history", s.powerHistory)
 }
 
 // powerMay answers whether this session may use the page at `access` for a
@@ -494,4 +496,43 @@ func (s *Server) powerEvents(w http.ResponseWriter, r *http.Request) {
 			Initial: e.Initial, BeganAt: e.BeganAt, EndedAt: e.EndedAt})
 	}
 	writeJSON(w, map[string]any{"ok": true, "events": out})
+}
+
+// powerRanges are the history windows the page offers, each with the bucket
+// that keeps it near 300 points: one per 5 minutes over a day, per 30 over a
+// week, per 2 hours over a month.
+var powerRanges = map[string]struct{ span, bucket time.Duration }{
+	"24h": {24 * time.Hour, 5 * time.Minute},
+	"7d":  {7 * 24 * time.Hour, 30 * time.Minute},
+	"30d": {30 * 24 * time.Hour, 2 * time.Hour},
+}
+
+// powerHistoryKeys are the measures the charts draw: the two voltages on one,
+// battery and load percentages on the other.
+var powerHistoryKeys = []string{"input_v", "output_v", "battery_pct", "load_pct"}
+
+// powerHistory is `GET /api/power/units/{id}/history?range=24h|7d|30d`.
+func (s *Server) powerHistory(w http.ResponseWriter, r *http.Request) {
+	sess := s.powerSession(w, r)
+	if sess == nil {
+		return
+	}
+	u, ok := s.powerFind(w, sess, r.PathValue("id"), "read")
+	if !ok {
+		return
+	}
+	rg, ok := powerRanges[r.URL.Query().Get("range")]
+	if !ok {
+		rg = powerRanges["24h"]
+	}
+	to := time.Now().UnixMilli()
+	from := to - rg.span.Milliseconds()
+	series, err := s.auditDB.PowerHistory(u.ID, powerHistoryKeys, from, to, rg.bucket.Milliseconds())
+	if err != nil {
+		log.Printf("[power] history: %v", err)
+		writeJSONErr(w, http.StatusInternalServerError, "history failed")
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true, "from": from, "to": to,
+		"bucketMs": rg.bucket.Milliseconds(), "series": series})
 }

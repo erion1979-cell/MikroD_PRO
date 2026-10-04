@@ -6,6 +6,8 @@ package db
 import (
 	"database/sql"
 	"errors"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -194,6 +196,48 @@ func (d *DB) PowerEvents(unitID string, openOnly bool, limit int) ([]PowerEvent,
 		}
 		e.Fault, e.Initial = fault != 0, initial != 0
 		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// PowerPoint is one measure over one bucket of a history window.
+type PowerPoint struct {
+	TS  int64   `json:"t"`
+	Avg float64 `json:"avg"`
+	Min float64 `json:"min"`
+	Max float64 `json:"max"`
+}
+
+// PowerHistory is a unit's measures from `from` to `to`, folded into buckets of
+// `bucketMs` (a whole number of minutes): the mean of the minute averages, the
+// lowest minimum and the highest maximum, so a dip shorter than a bucket still
+// shows as the minimum. Keyed by measure, each series in time order.
+func (d *DB) PowerHistory(unitID string, keys []string, from, to, bucketMs int64) (map[string][]PowerPoint, error) {
+	out := map[string][]PowerPoint{}
+	if len(keys) == 0 || bucketMs < 60000 {
+		return out, nil
+	}
+	args := []any{bucketMs, bucketMs, unitID, from, to}
+	marks := make([]string, len(keys))
+	for i, k := range keys {
+		marks[i] = "?"
+		args = append(args, k)
+		out[k] = []PowerPoint{}
+	}
+	rows, err := d.sql.Query(`SELECT key, (ts / ?) * ?, AVG(avg), MIN(min), MAX(max)
+	    FROM power_samples WHERE unit_id = ? AND ts >= ? AND ts <= ? AND key IN (`+
+		strings.Join(marks, ",")+`) GROUP BY key, ts / `+strconv.FormatInt(bucketMs, 10)+` ORDER BY key, 2`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var k string
+		var p PowerPoint
+		if err := rows.Scan(&k, &p.TS, &p.Avg, &p.Min, &p.Max); err != nil {
+			return nil, err
+		}
+		out[k] = append(out[k], p)
 	}
 	return out, rows.Err()
 }
