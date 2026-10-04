@@ -39,6 +39,16 @@
 # --platform=$BUILDPLATFORM: an .mmdb is the same file on every architecture,
 # so downloading it once natively beats downloading it three times, twice
 # under emulation.
+# ── THE RUNTIME BASE IS AN ARGUMENT, for ARMv5 ───────────────────────────
+#
+# Alpine publishes no linux/arm/v5 image, and the hEX refresh (EN7562CT) runs
+# only arm32v5 images: an ARMv7 binary dies there with "Illegal instruction".
+# busybox does publish arm/v5, so that build passes
+#   --platform linux/arm/v5 --build-arg RUNTIME=busybox:1.37
+# Every other platform keeps alpine. The runtime stage runs nothing, so either
+# base works, and so a cross-build needs no emulation at all.
+ARG RUNTIME=alpine:3.24
+
 FROM --platform=$BUILDPLATFORM alpine:3.24 AS geodata
 RUN apk add --no-cache curl
 RUN set -eux; \
@@ -128,13 +138,20 @@ COPY --from=geodata /dbip.mmdb     /geo/dbip-city-lite.mmdb
 COPY --from=geodata /dbip-asn.mmdb /geo/dbip-asn-lite.mmdb
 RUN go run ./cmd/geogen -mmdb /geo/dbip-city-lite.mmdb -out /geo/cities.json
 
+# THE TIME ZONE DATABASE, as files for the runtime stage to copy (see below).
+# ca-certificates is already in this image.
+RUN apk add --no-cache tzdata
+
 # ── runtime ───────────────────────────────────────────────────────────────
-FROM alpine:3.24
+FROM ${RUNTIME}
 # ca-certificates: the notification transports talk TLS to Telegram, SMTP and
 # ntfy, and an image with no roots fails all three at the moment they matter.
 # tzdata: `alertTimestamp` calls time.LoadLocation with the install's display
 # zone, which silently falls back to UTC without the database.
-RUN apk add --no-cache ca-certificates tzdata
+# Both are architecture-independent files, COPIED from the build stage rather
+# than installed here, so this stage needs no package manager (busybox has none).
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=build /usr/share/zoneinfo /usr/share/zoneinfo
 WORKDIR /app
 COPY --from=build /out/mikrodash /usr/local/bin/mikrodash
 COPY --from=build /src/web/dist  /app/web/dist

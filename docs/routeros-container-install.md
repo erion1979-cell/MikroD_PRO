@@ -18,7 +18,7 @@ including the two that are easy to get wrong and give you no useful error when y
 | | |
 |---|---|
 | **RouterOS** | 7.4 or later. The syntax below has two forms, split at **7.21**; both are given. |
-| **Architecture** | arm, arm64 or x86. MikroDash publishes `linux/amd64`, `linux/arm64` and `linux/arm/v7`. |
+| **Architecture** | arm, arm64 or x86. MikroDash publishes `linux/amd64`, `linux/arm64` and `linux/arm/v7`. The **hEX refresh** runs only ARMv5 images: see [Routers that run only ARMv5 images](#routers-that-run-only-armv5-images). The classic hEX and hEX S (MMIPS) cannot run containers. |
 | **Package** | The `container` package must be installed (it is a separate download from the RouterOS bundle). |
 | **Storage** | An external disk (USB or NVMe). The image is about 180 MB and the router's internal flash is usually too small. |
 | **Physical access** | Required once, to enable container mode. See the next step. |
@@ -166,6 +166,34 @@ Then start it and watch it come up:
 
 The first pull takes a few minutes. `/container/print` shows `status=running` when it is
 ready.
+
+### Routers that run only ARMv5 images
+
+MikroTik's container documentation says routers with the EN7562CT CPU, such as the
+**hEX refresh**, run only `arm32v5` images. The published `linux/arm/v7` image stops there
+at once with *Illegal instruction*. No ARMv5 image is published, so build one on any
+Docker host and load it from a file:
+
+```bash
+# Once per Docker host: lets it build for ARM
+docker run --privileged --rm tonistiigi/binfmt --install arm
+
+docker buildx build --platform linux/arm/v5 --build-arg RUNTIME=busybox:1.37 \
+  -t mikrodash:armv5 --load .
+docker save mikrodash:armv5 -o mikrodash-armv5.tar
+```
+
+Copy `mikrodash-armv5.tar` to the router's USB disk and create the container with
+`file=` in place of `remote-image=`:
+
+```routeros
+/container/add file=usb1/mikrodash-armv5.tar interface=veth_mikrodash \
+  root-dir=usb1/mikrodash mountlists=mikrodash_data \
+  logging=yes start-on-boot=yes comment="MikroDash"
+```
+
+Updating is the same build and a new file, not `/container/repull`. The hEX refresh's
+128 MB of flash cannot hold the image, so the USB disk is required.
 
 ### No environment variables are needed
 
