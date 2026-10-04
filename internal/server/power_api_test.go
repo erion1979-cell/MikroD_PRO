@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"mikrodash/internal/db"
+	"mikrodash/internal/hub"
+	"mikrodash/internal/power"
 )
 
 // powerAPI is a signed-in server with an empty database, two sites and two
@@ -21,6 +23,7 @@ type powerAPI struct {
 	token string
 	sql   *sql.DB
 	d     *db.DB
+	srv   *Server
 }
 
 func newPowerAPI(t *testing.T) *powerAPI {
@@ -59,7 +62,7 @@ func newPowerAPI(t *testing.T) *powerAPI {
 		t.Fatalf("sign-in: %d", rec.Code)
 	}
 	token := strings.SplitN(strings.TrimPrefix(rec.Header().Get("Set-Cookie"), "mikrodash_sid="), ";", 2)[0]
-	p := &powerAPI{t: t, h: handler, token: token, sql: h, d: d}
+	p := &powerAPI{t: t, h: handler, token: token, sql: h, d: d, srv: srv}
 	p.grant() // start from none, whatever sign-in wrote
 	return p
 }
@@ -233,5 +236,66 @@ func TestPowerUnitWritesAreValidatedAndAudited(t *testing.T) {
 	want := "power.unit.create power.unit.create power.unit.update power.unit.delete"
 	if got := strings.Join(actions, " "); got != want {
 		t.Errorf("audited %q, want %q", got, want)
+	}
+}
+
+// LIVE UPDATES GO ONLY WHERE THE LIST WOULD: a viewer receives a unit's
+// `power:state` only while on the page and only for a site they may read,
+// asked at each send.
+func TestPowerLiveUpdatesFollowSitePermission(t *testing.T) {
+	p := newPowerAPI(t)
+	p.grant("pw-view@site-1")
+	srv := p.srv
+	srv.power.mu.Lock()
+	srv.power.siteOf = map[string]string{"u1": "site-1", "u2": "site-2"}
+	srv.power.mu.Unlock()
+
+	client := hub.NewClient("viewer", 16)
+	srv.hub.Add(client)
+	cn := &conn{srv: srv, c: client, sess: &Session{Username: "someone", AuthMode: "modern"}}
+	received := func() []string {
+		var ids []string
+		for {
+			select {
+			case frame := <-client.Send:
+				var f struct {
+					Event string     `json:"event"`
+					Data  PowerState `json:"data"`
+				}
+				if err := json.Unmarshal(frame, &f); err != nil || f.Event != "power:state" {
+					t.Fatalf("unexpected frame %s", frame)
+				}
+				ids = append(ids, f.Data.UnitID)
+			default:
+				return ids
+			}
+		}
+	}
+	push := func() {
+		for _, id := range []string{"u1", "u2", "unknown"} {
+			srv.powerPush(power.State{UnitID: id, Online: true})
+		}
+	}
+
+	push()
+	if got := received(); len(got) != 0 {
+		t.Errorf("a socket not on the page received %v", got)
+	}
+	srv.powerWatch(cn, true)
+	push()
+	if got := strings.Join(received(), ","); got != "u1" {
+		t.Errorf("a site-1 viewer received %q, want only u1", got)
+	}
+	// Revoked between two polls: the next one is not sent.
+	p.grant()
+	push()
+	if got := received(); len(got) != 0 {
+		t.Errorf("after the grant was revoked the viewer received %v", got)
+	}
+	p.grant("pw-view@global")
+	srv.powerWatch(cn, false)
+	push()
+	if got := received(); len(got) != 0 {
+		t.Errorf("after leaving the page the viewer received %v", got)
 	}
 }

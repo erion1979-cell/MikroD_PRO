@@ -18,35 +18,11 @@
 
 import { el, esc, renderSortHeader, sortRows, type SortState } from '../dom';
 import { fmtTs } from '../timefmt';
+import type { Socket } from '../socket';
+import type { PowerCond, PowerState } from '../gen/payloads';
 
-interface Cond {
-  kind: string;
-  code: number;
-  text: string;
-  fault: boolean;
-  initial: boolean;
-  beganAt: number;
-  endedAt: number | null;
-}
-
-interface UnitState {
-  unitId: string;
-  online: boolean;
-  hasReading: boolean;
-  mode: string;
-  values: Record<string, number>;
-  flags: Record<string, boolean>;
-  raw: Record<string, number>;
-  apparentVa: number | null;
-  eventCode: number;
-  eventText: string;
-  lastOk: number;
-  replyMs: number;
-  polls: number;
-  answered: number;
-  lastError: string;
-  open: Cond[];
-}
+type Cond = PowerCond;
+type UnitState = PowerState;
 
 interface Unit {
   id: string;
@@ -172,7 +148,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return body;
 }
 
-export function initPowerUpsPage(isVisible: (page: string) => boolean): void {
+export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => boolean): void {
   let data: PowerList = { units: [], models: [], writableSites: [], polling: true };
   let sites: Record<string, string> = {};
   let routers: { id: string; label: string }[] = [];
@@ -241,7 +217,7 @@ export function initPowerUpsPage(isVisible: (page: string) => boolean): void {
         return s === filter;
       })
       .map((u) => {
-        const v = u.state?.hasReading ? u.state.values : {};
+        const v = (u.state?.hasReading && u.state.values) || {};
         return {
           unit: u, name: u.name, site: siteName(u.siteId), status: STATUS[statusOf(u)].rank,
           input: v.input_v ?? null, output: v.output_v ?? null, load: v.load_pct ?? null,
@@ -337,8 +313,8 @@ export function initPowerUpsPage(isVisible: (page: string) => boolean): void {
     if (!u) return;
     const st = u.state;
     const s = statusOf(u);
-    const v = st?.hasReading ? st.values : {};
-    const f = st?.hasReading ? st.flags : {};
+    const v = (st?.hasReading && st.values) || {};
+    const f = (st?.hasReading && st.flags) || {};
 
     el('pwUnitSite')!.textContent = siteName(u.siteId);
     el('pwUnitName')!.textContent = u.name;
@@ -523,6 +499,22 @@ export function initPowerUpsPage(isVisible: (page: string) => boolean): void {
     if (!info) return;
     info.hidden = !info.hidden;
     el('pwf_infoBtn')!.setAttribute('aria-expanded', info.hidden ? 'false' : 'true');
+  });
+
+  // ── LIVE ──────────────────────────────────────────────────────────────────
+  //
+  // One unit after each of its polls, sent only while this page is open and
+  // only for units this viewer may read (internal/server/power_live.go). The
+  // events list is re-read when the unit's open conditions change, which is
+  // the only time it can have changed.
+  socket.on('power:state', (st) => {
+    const u = data.units.find((x) => x.id === st.unitId);
+    if (!u) return;
+    const before = (u.state?.open || []).map((c) => c.kind + c.code).join();
+    u.state = st;
+    if (!isVisible('power-ups')) return;
+    draw();
+    if (openId === u.id && before !== st.open.map((c) => c.kind + c.code).join()) void loadEvents();
   });
 
   document.addEventListener('mikrodash:pagechange', (e) => {

@@ -889,6 +889,35 @@ export interface PingPayload {
   pollMs: number;
 }
 
+export interface PowerCond {
+  kind: string;
+  code: number;
+  text: string;
+  fault: boolean;
+  initial: boolean;
+  beganAt: number;
+  endedAt: number | null;
+}
+
+export interface PowerState {
+  unitId: string;
+  online: boolean;
+  hasReading: boolean;
+  mode: string;
+  values: Record<string, number> | null;
+  flags: Record<string, boolean> | null;
+  raw: Record<string, number> | null;
+  apparentVa: number | null;
+  eventCode: number;
+  eventText: string;
+  lastOk: number;
+  replyMs: number;
+  polls: number;
+  answered: number;
+  lastError: string;
+  open: PowerCond[];
+}
+
 export interface PPPSession {
   id: string;
   name: string;
@@ -2115,6 +2144,7 @@ export interface Events {
   'netwatch:update': NetwatchPayload;
   'packages:update': PackagesPayload;
   'ping:update': PingPayload;
+  'power:state': PowerState;
   'ppp:update': PPPPayload;
   'queues:update': QueuesPayload;
   'rosusers:update': RosUsersPayload;

@@ -286,6 +286,8 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	// grace expires. `releaseRouter` leaves the rooms and re-asks demand, which
 	// is what makes a closed tab indistinguishable from a blur.
 	cn.devicesBlur()
+	// A closed tab sends no blur: the Power/UPS page's updates stop here too.
+	cn.srv.powerWatch(cn, false)
 	// The device modal's stream, which a closed tab never says goodbye to.
 	cn.unpeek()
 	// The diagnostics ticker too: it is per socket, so a closing connection that
@@ -1032,6 +1034,12 @@ func (cn *conn) pageFocus(page string) {
 	cn.mu.Lock()
 	cn.page = page
 	cn.mu.Unlock()
+	// POWER/UPS NEEDS NO ROUTER, so it is wired before the router guard: its
+	// units belong to sites, and each update is checked against the unit's
+	// site as it is sent (power_live.go).
+	if page == powerPage {
+		cn.srv.powerWatch(cn, true)
+	}
 
 	if cn.routerID == "" {
 		// SAID OUT LOUD. The 2026-08-30 change made every refusal in
@@ -1427,6 +1435,9 @@ func (cn *conn) pageBlur(page string) {
 	if page == "devices" {
 		cn.devicesBlur()
 		cn.unpeek()
+	}
+	if page == powerPage {
+		cn.srv.powerWatch(cn, false)
 	}
 	// FORGOTTEN HERE TOO, or a later `router:select` would replay a page this
 	// viewer has left and re-wake its collectors. Only when it is the page we

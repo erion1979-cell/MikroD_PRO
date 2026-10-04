@@ -10,6 +10,7 @@ import (
 	"mikrodash/internal/db"
 	"mikrodash/internal/diag"
 	"mikrodash/internal/hub"
+	"mikrodash/internal/power"
 	"mikrodash/internal/routers"
 	"mikrodash/internal/secscan"
 	"mikrodash/internal/session"
@@ -81,6 +82,8 @@ func TestNoServerPayloadSendsANullArray(t *testing.T) {
 		"device:live": func() any { return routers.BuildLive(routers.LiveInput{}) },
 		// Provisioning off, no database: nothing enrolled, nothing issued.
 		"ztp:state": func() any { return (&Server{}).ztpPayload() },
+		// A unit that has never answered: no reading, no conditions.
+		"power:state": func() any { return powerStateView(power.State{UnitID: "u1"}) },
 		"tools:traceroute": func() any {
 			r := diag.FoldTraceroute("198.51.100.1", nil)
 			return ToolsTraceroutePayload{Result: &r}

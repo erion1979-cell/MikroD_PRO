@@ -30,6 +30,9 @@ var (
 	EvRoutersStats      = hub.Declare[[]routers.Row]("routers:stats")
 	EvDeviceLive        = hub.Declare[routers.Live]("device:live")
 	EvSitesUpdate       = hub.Declare[[]db.Site]("sites:update")
+	// One Power/UPS unit after each poll, to viewers of the page who may read
+	// its site (power_live.go).
+	EvPowerState        = hub.Declare[PowerState]("power:state")
 	EvToolsPing         = hub.Declare[ToolsPingPayload]("tools:ping")
 	EvToolsTraceroute   = hub.Declare[ToolsTraceroutePayload]("tools:traceroute")
 	EvToolsTorch        = hub.Declare[ToolsTorchPayload]("tools:torch")

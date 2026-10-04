@@ -33,6 +33,11 @@ import (
 type powerState struct {
 	mu      sync.Mutex
 	manager *power.Manager
+	// siteOf is each polled unit's site, "" for none, refreshed by powerSync:
+	// what a live update is checked against before it is sent (power_live.go).
+	siteOf map[string]string
+	// watchers is every socket with the page open.
+	watchers map[*conn]bool
 }
 
 // powerStart builds and starts the pollers, unless -no-pool or there is no
@@ -49,6 +54,7 @@ func (s *Server) powerStart(noPool, history bool) {
 	}
 	adb := s.auditDB
 	hooks := power.Hooks{
+		State: s.powerPush,
 		Restore: func(unitID string) []power.Change {
 			open, err := adb.PowerEvents(unitID, true, 100)
 			if err != nil {
@@ -108,6 +114,13 @@ func (s *Server) powerSync() {
 		log.Printf("[power] could not read units: %v", err)
 		return
 	}
+	sites := map[string]string{}
+	for _, r := range rows {
+		sites[r.ID] = siteOf(r)
+	}
+	s.power.mu.Lock()
+	s.power.siteOf = sites
+	s.power.mu.Unlock()
 	m.Sync(powerUnits(rows))
 }
 
