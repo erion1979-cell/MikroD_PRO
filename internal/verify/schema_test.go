@@ -46,7 +46,7 @@ func TestFixtureSchemasMatchReality(t *testing.T) {
 	var ddl strings.Builder
 	for _, rel := range []string{"schema_ddl.go", "cfg_schema.go", "ztp_schema.go",
 		"rollup.go", "notify_schema.go", "sso_schema.go", "credprof_schema.go",
-		"monitorruns_schema.go"} {
+		"monitorruns_schema.go", "power_schema.go"} {
 		ddl.WriteString(mustRead(t, filepath.Join(root, "internal", "db", rel)))
 		ddl.WriteString("\n")
 	}
