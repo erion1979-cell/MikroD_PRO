@@ -215,3 +215,20 @@ func TestOpenListsWhatIsTrueNow(t *testing.T) {
 		t.Errorf("open: %q", got)
 	}
 }
+
+func TestARestoredOutageCarriesOnOrEnds(t *testing.T) {
+	restored := []Change{{Cond: Cond{Kind: KindMainsLost, Text: "Mains lost"}, Began: true, At: 500}}
+
+	still := NewTracker()
+	still.Restore(restored)
+	// Still on battery after the restart: nothing begins again, and the
+	// outage keeps its original start.
+	expect(t, "still out", still.Success(reading(t, battery(60)), 9000), "")
+	if got := show(still.Open()); got != "+mains_lost@500" {
+		t.Errorf("open %q, want the outage from 500", got)
+	}
+
+	over := NewTracker()
+	over.Restore(restored)
+	expect(t, "ended while stopped", over.Success(reading(t, nil), 9000), "-mains_lost@9000(500)")
+}

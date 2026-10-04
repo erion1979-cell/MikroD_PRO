@@ -132,6 +132,22 @@ func (t *Tracker) Open() []Change {
 	return out
 }
 
+// Restore marks conditions as already open, with when they began: the ones a
+// previous run recorded and never saw end. Call it before the first poll.
+//
+// Without it a restart would open every ongoing condition a second time, with a
+// start time that is only when the new process first looked. With it, a
+// condition still true carries on; one that ended while nothing was running
+// ends at the first reading, which is the earliest anyone could know.
+func (t *Tracker) Restore(open []Change) {
+	if t.open == nil {
+		t.open = map[condKey]openCond{}
+	}
+	for _, c := range open {
+		t.open[c.key()] = openCond{cond: c.Cond, since: c.At}
+	}
+}
+
 // Success records a reading taken at now.
 func (t *Tracker) Success(r model.Reading, now int64) []Change {
 	if t.open == nil {
