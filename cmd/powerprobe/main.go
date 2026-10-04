@@ -16,10 +16,20 @@
 //	  go run ./cmd/powerprobe -host 192.168.20.83
 //
 // Add -count 0 to keep polling until Ctrl-C and watch events as they happen: pull
-// the mains plug, and "mains_lost began" should appear within one interval.
+// the mains plug, and "Mains lost began" should appear within one interval.
+//
+// ── STARTED WITH NO OPTIONS, IT ASKS ────────────────────────────────────────
+//
+// On Windows the natural way to run it is a double-click, which passes no
+// options. So with none it asks for the converter's address, port and slave id,
+// polls until the window is closed, and waits for Enter before closing on an
+// error, so the message can be read rather than flashing past.
+//
+//	GOOS=windows GOARCH=amd64 go build -o powerprobe.exe ./cmd/powerprobe
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"net"
@@ -46,6 +56,19 @@ func main() {
 	raw := flag.Bool("raw", false, "also print every register as read")
 	list := flag.Bool("models", false, "list the model definitions this build has, and exit")
 	flag.Parse()
+	if flag.NFlag() == 0 {
+		interactive = true
+		in := bufio.NewReader(os.Stdin)
+		fmt.Println("MikroDash Power/UPS probe - reads one unit, never writes to it.")
+		fmt.Println("The converter must be in Modbus TCP gateway mode.")
+		fmt.Println()
+		*host = ask(in, "Converter IP address", "")
+		*port = askInt(in, "Port", 502)
+		*slave = askInt(in, "Slave ID", 1)
+		*count = 0
+		fmt.Println("\nPolling every 5 seconds. Close this window (or press Ctrl-C) to stop.")
+		fmt.Println()
+	}
 
 	all, err := model.All()
 	if err != nil {
@@ -159,7 +182,46 @@ func report(cs []power.Change) {
 	}
 }
 
+// interactive is set when the probe was started with no options and asked its
+// questions: it then waits before closing on an error.
+var interactive bool
+
+func ask(in *bufio.Reader, q, def string) string {
+	for {
+		if def != "" {
+			fmt.Printf("%s [%s]: ", q, def)
+		} else {
+			fmt.Printf("%s: ", q)
+		}
+		line, err := in.ReadString('\n')
+		line = strings.TrimSpace(line)
+		if line == "" {
+			line = def
+		}
+		if line != "" {
+			return line
+		}
+		if err != nil {
+			fail("no answer to %q", q)
+		}
+	}
+}
+
+func askInt(in *bufio.Reader, q string, def int) int {
+	for {
+		v, err := strconv.Atoi(ask(in, q, strconv.Itoa(def)))
+		if err == nil {
+			return v
+		}
+		fmt.Println("  a number, please")
+	}
+}
+
 func fail(format string, a ...any) {
 	fmt.Fprintf(os.Stderr, "powerprobe: "+format+"\n", a...)
+	if interactive {
+		fmt.Fprint(os.Stderr, "\nPress Enter to close.")
+		_, _ = bufio.NewReader(os.Stdin).ReadString('\n')
+	}
 	os.Exit(2)
 }
