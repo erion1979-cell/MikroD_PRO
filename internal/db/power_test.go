@@ -222,3 +222,40 @@ func TestPowerHistoryFoldsMinutesIntoBuckets(t *testing.T) {
 		t.Errorf("a window from minute 10 returned %d buckets", len(h["input_v"]))
 	}
 }
+
+func TestPowerEventsInAWindowIncludeTheOnesOverlappingIt(t *testing.T) {
+	d := openTest(t, t.TempDir())
+	u := newPowerUnit(t, d)
+	add := func(kind string, began int64, ended *int64) {
+		t.Helper()
+		if err := d.BeginPowerEvent(PowerEvent{UnitID: u.ID, Kind: kind, Text: kind, BeganAt: began}); err != nil {
+			t.Fatal(err)
+		}
+		if ended != nil {
+			if err := d.EndPowerEvent(u.ID, kind, 0, *ended); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	at := func(v int64) *int64 { return &v }
+	add("before", 100, at(200))    // over before the window
+	add("straddle", 500, at(1500)) // began before, ended inside
+	add("inside", 1200, at(1300))
+	add("open", 1800, nil) // still going
+	add("after", 3000, at(3100))
+	got, err := d.PowerEventsIn(u.ID, 1000, 2000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var kinds []string
+	for _, e := range got {
+		kinds = append(kinds, e.Kind)
+	}
+	if strings.Join(kinds, ",") != "straddle,inside,open" {
+		t.Errorf("window 1000-2000 returned %v", kinds)
+	}
+	mins, _ := d.PowerMinutes(u.ID, 0, 1)
+	if mins == nil {
+		t.Error("no minutes is nil, not an empty list")
+	}
+}

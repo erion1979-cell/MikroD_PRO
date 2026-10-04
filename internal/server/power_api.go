@@ -34,6 +34,7 @@ import (
 	"mikrodash/internal/db"
 	"mikrodash/internal/power"
 	"mikrodash/internal/power/model"
+	"mikrodash/internal/reports"
 	"mikrodash/internal/store"
 )
 
@@ -46,6 +47,7 @@ func (s *Server) registerPower(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/power/units/{id}", s.powerDelete)
 	mux.HandleFunc("GET /api/power/units/{id}/events", s.powerEvents)
 	mux.HandleFunc("GET /api/power/units/{id}/history", s.powerHistory)
+	mux.HandleFunc("GET /api/power/units/{id}/export.csv", s.powerExport)
 }
 
 // powerMay answers whether this session may use the page at `access` for a
@@ -578,4 +580,93 @@ func (s *Server) powerHistory(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, map[string]any{"ok": true, "from": from, "to": to,
 		"bucketMs": rg.bucket.Milliseconds(), "series": series})
+}
+
+// powerExport is `GET /api/power/units/{id}/export.csv?range=24h|7d|30d&what=history|events`:
+// the unit's minute history (every measure's average, minimum and maximum, and
+// the polls answered) or its events in the window, as CSV. Built with the
+// Reports CSV writer, which defuses a cell a spreadsheet would run as a
+// formula, and timestamped in the install's display zone like every export.
+func (s *Server) powerExport(w http.ResponseWriter, r *http.Request) {
+	sess := s.powerSession(w, r)
+	if sess == nil {
+		return
+	}
+	u, ok := s.powerFind(w, sess, r.PathValue("id"), "read")
+	if !ok {
+		return
+	}
+	rangeKey := r.URL.Query().Get("range")
+	rg, ok := powerRanges[rangeKey]
+	if !ok {
+		rangeKey, rg = "24h", powerRanges["24h"]
+	}
+	to := time.Now().UnixMilli()
+	from := to - rg.span.Milliseconds()
+	tz := s.displayTZ()
+
+	var columns []string
+	var rows []map[string]any
+	what := "history"
+	if r.URL.Query().Get("what") == "events" {
+		what = "events"
+		events, err := s.auditDB.PowerEventsIn(u.ID, from, to)
+		if err != nil {
+			log.Printf("[power] export events: %v", err)
+			writeJSONErr(w, http.StatusInternalServerError, "export failed")
+			return
+		}
+		columns = []string{"began", "ended", "duration_s", "kind", "code", "text", "fault", "already_on_start"}
+		for _, e := range events {
+			row := map[string]any{"began": reports.TsFmt(e.BeganAt, tz), "ended": "", "duration_s": "",
+				"kind": e.Kind, "code": e.Code, "text": e.Text, "fault": e.Fault, "already_on_start": e.Initial}
+			if e.EndedAt != nil {
+				row["ended"] = reports.TsFmt(*e.EndedAt, tz)
+				row["duration_s"] = (*e.EndedAt - e.BeganAt) / 1000
+			}
+			rows = append(rows, row)
+		}
+	} else {
+		keys := make([]string, 0, len(model.Measures))
+		columns = []string{"ts"}
+		for _, m := range model.Measures {
+			keys = append(keys, m.Key)
+			columns = append(columns, m.Key, m.Key+"_min", m.Key+"_max")
+		}
+		columns = append(columns, "polls", "answered", "reply_ms")
+		series, err := s.auditDB.PowerHistory(u.ID, keys, from, to, 60_000)
+		mins, merr := s.auditDB.PowerMinutes(u.ID, from, to)
+		if err != nil || merr != nil {
+			log.Printf("[power] export history: %v %v", err, merr)
+			writeJSONErr(w, http.StatusInternalServerError, "export failed")
+			return
+		}
+		byTS := map[int64]map[string]any{}
+		for _, m := range mins {
+			byTS[m.TS] = map[string]any{"ts": reports.TsFmt(m.TS, tz), "polls": m.Polls, "answered": m.OK,
+				"reply_ms": float64(int(m.ReplyMs*10)) / 10}
+		}
+		for key, pts := range series {
+			for _, p := range pts {
+				row := byTS[p.TS]
+				if row == nil {
+					continue
+				}
+				row[key], row[key+"_min"], row[key+"_max"] = p.Avg, p.Min, p.Max
+			}
+		}
+		for _, m := range mins {
+			rows = append(rows, byTS[m.TS])
+		}
+	}
+
+	name := strings.Map(func(r rune) rune {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' {
+			return r
+		}
+		return '-'
+	}, u.Name)
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="power-`+name+`-`+what+`-`+rangeKey+`.csv"`)
+	_, _ = w.Write([]byte(reports.ToCSV(rows, columns)))
 }

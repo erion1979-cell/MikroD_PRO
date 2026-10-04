@@ -297,9 +297,17 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
     draw();
   });
 
+  /** Points the two export links at the open unit and the chosen window. */
+  function setExportLinks(): void {
+    const base = '/api/power/units/' + encodeURIComponent(openId) + '/export.csv?range=' + range;
+    el<HTMLAnchorElement>('pwExport')?.setAttribute('href', base);
+    el<HTMLAnchorElement>('pwExportEvents')?.setAttribute('href', base + '&what=events');
+  }
+
   async function loadHistory(): Promise<void> {
     const id = openId;
     if (!id) return;
+    setExportLinks();
     historyAt = Date.now();
     const note = el('pwHistoryNote');
     try {

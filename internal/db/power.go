@@ -241,3 +241,55 @@ func (d *DB) PowerHistory(unitID string, keys []string, from, to, bucketMs int64
 	}
 	return out, rows.Err()
 }
+
+// PowerMinuteRow is one row of power_minutes.
+type PowerMinuteRow struct {
+	TS      int64
+	Polls   int
+	OK      int
+	ReplyMs float64
+}
+
+// PowerMinutes is a unit's poll counts from `from` to `to`, oldest first.
+func (d *DB) PowerMinutes(unitID string, from, to int64) ([]PowerMinuteRow, error) {
+	rows, err := d.sql.Query(`SELECT ts, polls, ok, reply_ms FROM power_minutes
+	    WHERE unit_id = ? AND ts >= ? AND ts <= ? ORDER BY ts`, unitID, from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []PowerMinuteRow{}
+	for rows.Next() {
+		var m PowerMinuteRow
+		if err := rows.Scan(&m.TS, &m.Polls, &m.OK, &m.ReplyMs); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+// PowerEventsIn is a unit's events that overlap `from` to `to`, oldest first:
+// one that began before the window and ended inside it, or is still open,
+// belongs to the window too.
+func (d *DB) PowerEventsIn(unitID string, from, to int64) ([]PowerEvent, error) {
+	rows, err := d.sql.Query(`SELECT id, unit_id, kind, code, text, fault, initial, began_at, ended_at
+	    FROM power_events WHERE unit_id = ? AND began_at <= ? AND (ended_at IS NULL OR ended_at >= ?)
+	    ORDER BY began_at, id`, unitID, to, from)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []PowerEvent{}
+	for rows.Next() {
+		var e PowerEvent
+		var fault, initial int
+		if err := rows.Scan(&e.ID, &e.UnitID, &e.Kind, &e.Code, &e.Text, &fault, &initial,
+			&e.BeganAt, &e.EndedAt); err != nil {
+			return nil, err
+		}
+		e.Fault, e.Initial = fault != 0, initial != 0
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}

@@ -366,3 +366,58 @@ func TestPowerListNarrowsToARoutersSites(t *testing.T) {
 		t.Errorf("no router: %q scoped=%v", got, scoped)
 	}
 }
+
+func TestPowerExportWritesHistoryAndEventsAsCSV(t *testing.T) {
+	p := newPowerAPI(t)
+	p.grant("pw-view@global")
+	site := "site-1"
+	u, err := p.d.CreatePowerUnit(db.PowerUnit{Name: "INV 01/Server", SiteID: &site, Model: "powerguard/modbus-v1.1",
+		Host: "198.51.100.10", Port: 502, SlaveID: 1, Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UnixMilli() / 60_000 * 60_000
+	for i, v := range []float64{229.5, 1} {
+		ts := now - int64(2-i)*60_000
+		if err := p.d.RecordPowerMinute(u.ID, ts, 12, 11, 140, []db.PowerStat{{Key: "input_v", Avg: v, Min: v - 1, Max: v + 1}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A text a spreadsheet would execute, as a hostile model definition could
+	// put in an event name.
+	if err := p.d.BeginPowerEvent(db.PowerEvent{UnitID: u.ID, Kind: "event", Code: 3, Text: "=HYPERLINK(1)",
+		Fault: true, BeganAt: now - 90_000}); err != nil {
+		t.Fatal(err)
+	}
+	get := func(q string) (string, string) {
+		req := httptest.NewRequest("GET", "/api/power/units/"+u.ID+"/export.csv?"+q, nil)
+		req.Header.Set("Cookie", "mikrodash_sid="+p.token)
+		rec := httptest.NewRecorder()
+		p.h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s: %d %s", q, rec.Code, rec.Body.String())
+		}
+		return rec.Header().Get("Content-Disposition"), rec.Body.String()
+	}
+	disp, body := get("range=24h")
+	lines := strings.Split(body, "\n")
+	if !strings.Contains(disp, `filename="power-INV-01-Server-history-24h.csv"`) {
+		t.Errorf("disposition %q", disp)
+	}
+	if len(lines) != 3 || !strings.HasPrefix(lines[0], "ts,input_v,input_v_min,input_v_max,input_hz,") ||
+		!strings.HasSuffix(lines[0], ",polls,answered,reply_ms") {
+		t.Fatalf("history CSV:\n%s", body)
+	}
+	if !strings.Contains(lines[1], ",229.5,228.5,230.5,") || !strings.HasSuffix(lines[1], ",12,11,140") ||
+		!strings.Contains(lines[2], ",1,0,2,") {
+		t.Errorf("history rows:\n%s", body)
+	}
+	_, body = get("range=7d&what=events")
+	lines = strings.Split(body, "\n")
+	if len(lines) != 2 || lines[0] != "began,ended,duration_s,kind,code,text,fault,already_on_start" {
+		t.Fatalf("events CSV:\n%s", body)
+	}
+	if !strings.Contains(lines[1], ",,,event,3,'=HYPERLINK(1),true,false") {
+		t.Errorf("event row %q: an open event has no end, and the formula must be defused", lines[1])
+	}
+}
