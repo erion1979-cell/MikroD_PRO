@@ -57,5 +57,14 @@ running → on battery; else output off.
 6. Notifications.
 7. Dashboard card, Reports tab, CSV export.
 
-Live testing against a real unit happens on the owner's network; a read-only command-line tool
-will poll one unit and print what it decodes.
+Live testing against a real unit happens on the owner's network, with the read-only
+`cmd/powerprobe`. It uses the same Modbus client, model definition and event tracker as the
+server, so what it prints is what the page will show:
+
+```bash
+docker run --rm --network host -v "$PWD":/src -w /src golang:1.27-alpine \
+  go run ./cmd/powerprobe -host 192.168.20.83 -count 0
+```
+
+`-port`, `-slave` and `-model` default to 502, 1 and `powerguard/modbus-v1.1`; `-raw` also prints
+every register; `-models` lists the definitions.
