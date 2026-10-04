@@ -1,0 +1,148 @@
+package server
+
+// The Power/UPS module's place in the server: the pollers (internal/power),
+// their storage, and (in later files) the page's routes.
+//
+// ── ON UNLESS -no-pool ──────────────────────────────────────────────────────
+//
+// The pollers run whether or not anyone has the page open, because a mains
+// outage is only visible while it lasts: a poller started when somebody opens
+// the page would miss every outage that happened before. `-no-pool` is the
+// existing switch for a second MikroDash watching the same fleet, and it stops
+// these too, because a converter drops its oldest client and two pollers would
+// keep knocking each other off.
+//
+// ── HISTORY ONLY UNDER -history, EVENTS ALWAYS ──────────────────────────────
+//
+// Minute rows are history, written only under `-history` like the routers'
+// traffic history and for its reason (two writers, two rows a minute). Events
+// are written regardless, as router alerts are: they are what the page lists
+// and what a restart restores the trackers from.
+
+import (
+	"log"
+	"net"
+	"strconv"
+	"sync"
+
+	"mikrodash/internal/db"
+	"mikrodash/internal/power"
+	"mikrodash/internal/power/model"
+)
+
+type powerState struct {
+	mu      sync.Mutex
+	manager *power.Manager
+}
+
+// powerStart builds and starts the pollers, unless -no-pool or there is no
+// database to keep units in.
+func (s *Server) powerStart(noPool, history bool) {
+	if noPool || s.auditDB == nil {
+		return
+	}
+	if _, err := model.All(); err != nil {
+		// A broken definition fails the tests before a release, so this is a
+		// build that should not exist; said, and the models that did load are
+		// still served.
+		log.Printf("[power] WARNING: a model definition did not load: %v", err)
+	}
+	adb := s.auditDB
+	hooks := power.Hooks{
+		Restore: func(unitID string) []power.Change {
+			open, err := adb.PowerEvents(unitID, true, 100)
+			if err != nil {
+				log.Printf("[power] could not read open events for %s: %v", unitID, err)
+				return nil
+			}
+			out := make([]power.Change, 0, len(open))
+			for _, e := range open {
+				out = append(out, power.Change{Cond: power.Cond{Kind: power.Kind(e.Kind),
+					Code: e.Code, Text: e.Text, Fault: e.Fault}, Began: true, At: e.BeganAt, Initial: e.Initial})
+			}
+			return out
+		},
+		Changes: func(unitID string, cs []power.Change) {
+			for _, c := range cs {
+				var err error
+				if c.Began {
+					err = adb.BeginPowerEvent(db.PowerEvent{UnitID: unitID, Kind: string(c.Kind),
+						Code: c.Code, Text: c.Text, Fault: c.Fault, Initial: c.Initial, BeganAt: c.At})
+				} else {
+					err = adb.EndPowerEvent(unitID, string(c.Kind), c.Code, c.At)
+				}
+				if err != nil {
+					log.Printf("[power] could not record %s on %s: %v", c.Kind, unitID, err)
+				}
+			}
+		},
+	}
+	if history {
+		hooks.Minute = func(unitID string, m power.Minute) {
+			stats := make([]db.PowerStat, 0, len(m.Stats))
+			for _, st := range m.Stats {
+				stats = append(stats, db.PowerStat{Key: st.Key, Avg: st.Avg, Min: st.Min, Max: st.Max})
+			}
+			if err := adb.RecordPowerMinute(unitID, m.Start, m.Polls, m.OK, m.ReplyMs, stats); err != nil {
+				log.Printf("[power] could not record a minute for %s: %v", unitID, err)
+			}
+		}
+	}
+	s.power.mu.Lock()
+	s.power.manager = power.NewManager(hooks, power.DefaultSettings())
+	s.power.mu.Unlock()
+	s.powerSync()
+}
+
+// powerSync points the pollers at the enabled units in the database. Called at
+// start and after every change to a unit.
+func (s *Server) powerSync() {
+	s.power.mu.Lock()
+	m := s.power.manager
+	s.power.mu.Unlock()
+	if m == nil {
+		return
+	}
+	rows, err := s.auditDB.PowerUnits()
+	if err != nil {
+		log.Printf("[power] could not read units: %v", err)
+		return
+	}
+	m.Sync(powerUnits(rows))
+}
+
+// powerUnits turns stored units into what the pollers poll: enabled ones whose
+// model this build knows and whose slave id fits a byte.
+func powerUnits(rows []db.PowerUnit) []power.Unit {
+	out := make([]power.Unit, 0, len(rows))
+	for _, r := range rows {
+		if !r.Enabled {
+			continue
+		}
+		mdl := model.ByID(r.Model)
+		if mdl == nil {
+			log.Printf("[power] %s names model %q, which this build does not have; not polled",
+				r.Name, r.Model)
+			continue
+		}
+		if r.SlaveID < 1 || r.SlaveID > 247 {
+			log.Printf("[power] %s has slave id %d, outside 1-247; not polled", r.Name, r.SlaveID)
+			continue
+		}
+		out = append(out, power.Unit{ID: r.ID, Model: mdl,
+			Addr: net.JoinHostPort(r.Host, strconv.Itoa(r.Port)), Slave: byte(r.SlaveID)})
+	}
+	return out
+}
+
+// powerShutdown stops the pollers and writes the minute in progress. Before
+// the database closes.
+func (s *Server) powerShutdown() {
+	s.power.mu.Lock()
+	m := s.power.manager
+	s.power.manager = nil
+	s.power.mu.Unlock()
+	if m != nil {
+		m.Stop()
+	}
+}

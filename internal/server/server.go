@@ -146,6 +146,8 @@ type Server struct {
 	// ztp is zero-touch provisioning's tunnel engine and its enrolment
 	// endpoint (ztp.go), up only while the ztpEnabled setting is on.
 	ztp ztpState
+	// power is the Power/UPS module's pollers (power.go), off under -no-pool.
+	power powerState
 	// secScans is the Security Scan page's last report per router (secscan.go).
 	secScans       secScanStore
 	hub            *hub.Hub
@@ -556,6 +558,9 @@ func New(st *store.Store, opts Options) (*Server, error) {
 	// router's session that dials before this is up simply retries, as every
 	// session does on a failed dial.
 	srv.ztpSync()
+	// THE POWER/UPS POLLERS. Last, because they need nothing above and nothing
+	// above needs them; see power.go for why they run with no page open.
+	srv.powerStart(opts.NoPool, opts.History)
 	return srv, nil
 }
 
@@ -860,6 +865,8 @@ func (s *Server) Shutdown() {
 		s.credStop = nil
 	}
 	s.ztpShutdown()
+	// Writes the open Power/UPS minute, so before the database closes.
+	s.powerShutdown()
 	s.sessions.Shutdown()
 	// ── THE OPEN MINUTE, BEFORE THE CONNECTIONS GO ────────────────────
 	//
