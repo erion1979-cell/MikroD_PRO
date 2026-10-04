@@ -142,6 +142,13 @@ var portAddedPrunes = map[string]string{
 		"connectivity strip can draw time nobody was watching as not-monitored. Live had no such " +
 		"record. It ages on the connectivity policy because a run only means anything beside the " +
 		"connectivity rows it qualifies, and on last_seen_at so an open run is never pruned",
+	"power_minutes": "Power/UPS poll counts per unit per minute (2026-10-04). Live had no " +
+		"Power/UPS module. A metric, so it ages with traffic_samples",
+	"power_samples": "Power/UPS measures per unit per minute (2026-10-04), the same " +
+		"arrangement as power_minutes",
+	"power_events": "Power/UPS conditions - mains lost, event codes, not responding " +
+		"(2026-10-04). Live had no Power/UPS module. They are what the alert retention is " +
+		"for, and age on began_at",
 }
 
 // TestPortAddedPruneRulesAreRecorded — BOTH DIRECTIONS.
@@ -258,6 +265,20 @@ func TestPruneDeletesOnlyWhatIsOlderThanItsOwnPolicy(t *testing.T) {
 		// fail the one-left count below.
 		{"monitor_runs", 100,
 			`INSERT INTO monitor_runs (router_id, started_at, last_seen_at) VALUES ('r1', 0, ?)`, nil},
+		// Power/UPS history ages with the metrics and its events with the
+		// alerts. The unit they belong to is inserted below, before the seeds.
+		{"power_minutes", 10,
+			`INSERT INTO power_minutes (unit_id, ts, polls, ok, reply_ms) VALUES ('u1', ?, 12, 12, 140)`, nil},
+		{"power_samples", 10,
+			`INSERT INTO power_samples (unit_id, ts, key, avg, min, max) VALUES ('u1', ?, 'input_v', 230, 228, 231)`, nil},
+		{"power_events", 100,
+			`INSERT INTO power_events (unit_id, kind, text, began_at) VALUES ('u1', 'mains_lost', 'Mains lost', ?)`, nil},
+	}
+
+	// The unit itself is configuration, never aged: only its rows above are.
+	if _, err := d.sql.Exec(`INSERT INTO power_units (id, name, model, host, port, slave_id, created_at)
+	    VALUES ('u1', 'INV-01', 'powerguard/modbus-v1.1', '198.51.100.10', 502, 1, 0)`); err != nil {
+		t.Fatal(err)
 	}
 
 	for _, s := range seeds {
@@ -316,9 +337,10 @@ func openTestDB(t *testing.T) *DB {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// AND THE REAL `monitorRunsDDL`, the constant itself rather than a retyped
-	// copy, for the same reason as the line above.
-	if _, err := h.Exec(historyDDL + monitorRunsDDL); err != nil {
+	// AND THE REAL `monitorRunsDDL` and `powerTablesDDL`, the constants
+	// themselves rather than retyped copies, for the same reason as the line
+	// above.
+	if _, err := h.Exec(historyDDL + monitorRunsDDL + powerTablesDDL); err != nil {
 		t.Fatal(err)
 	}
 	_ = h.Close()

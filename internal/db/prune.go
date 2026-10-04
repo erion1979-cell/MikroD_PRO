@@ -196,6 +196,15 @@ var pruneRules = []pruneRule{
 	// Keyed on `last_seen_at`, the run's END: a run is old once it stopped, not
 	// once it started, or a long-lived run would be pruned while still open.
 	{"monitor_runs", "last_seen_at", PruneDays.AlertDays, true},
+
+	// ── POWER/UPS (2026-10-04), ON THE SAME TWO POLICIES ────────────────────
+	//
+	// Minute history is a metric like traffic; events are what the alert
+	// retention is for. An event ages on when it BEGAN: one still open after a
+	// whole retention period is a unit nobody has looked at in a year.
+	{"power_minutes", "ts", PruneDays.MetricDays, true},
+	{"power_samples", "ts", PruneDays.MetricDays, true},
+	{"power_events", "began_at", PruneDays.AlertDays, true},
 }
 
 const msPerDay = 86400000

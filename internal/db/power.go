@@ -1,0 +1,199 @@
+package db
+
+// Reading and writing the Power/UPS tables. What they hold and why is in
+// power_schema.go.
+
+import (
+	"database/sql"
+	"errors"
+	"time"
+)
+
+// ErrPowerUnitNotFound is an update or delete naming no unit.
+var ErrPowerUnitNotFound = errors.New("no such Power/UPS unit")
+
+// PowerUnit is one row of power_units. The nullable columns are pointers, so an
+// unset site or battery capacity reaches the browser as null rather than as ""
+// or 0 (see the note on Site).
+type PowerUnit struct {
+	ID        string   `json:"id"`
+	Name      string   `json:"name"`
+	SiteID    *string  `json:"siteId"`
+	Model     string   `json:"model"`
+	Host      string   `json:"host"`
+	Port      int      `json:"port"`
+	SlaveID   int      `json:"slaveId"`
+	RouterID  *string  `json:"routerId"`
+	BatteryAh *float64 `json:"batteryAh"`
+	Enabled   bool     `json:"enabled"`
+	CreatedAt int64    `json:"createdAt"`
+}
+
+const powerUnitCols = `id, name, site_id, model, host, port, slave_id, router_id, battery_ah, enabled, created_at`
+
+func scanPowerUnit(row interface{ Scan(...any) error }) (PowerUnit, error) {
+	var u PowerUnit
+	var enabled int
+	err := row.Scan(&u.ID, &u.Name, &u.SiteID, &u.Model, &u.Host, &u.Port, &u.SlaveID,
+		&u.RouterID, &u.BatteryAh, &enabled, &u.CreatedAt)
+	u.Enabled = enabled != 0
+	return u, err
+}
+
+// PowerUnits is every unit, by name.
+func (d *DB) PowerUnits() ([]PowerUnit, error) {
+	rows, err := d.sql.Query(`SELECT ` + powerUnitCols + ` FROM power_units ORDER BY name, id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []PowerUnit{}
+	for rows.Next() {
+		u, err := scanPowerUnit(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}
+
+// CreatePowerUnit inserts u with a new ID and creation time, and returns it as
+// stored. u.ID and u.CreatedAt are ignored.
+func (d *DB) CreatePowerUnit(u PowerUnit) (PowerUnit, error) {
+	// The same v4 UUID sites use: one way to mint an id in this package.
+	id, err := newSiteID()
+	if err != nil {
+		return PowerUnit{}, err
+	}
+	u.ID, u.CreatedAt = id, time.Now().UnixMilli()
+	_, err = d.sql.Exec(`INSERT INTO power_units (`+powerUnitCols+`) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+		u.ID, u.Name, u.SiteID, u.Model, u.Host, u.Port, u.SlaveID, u.RouterID, u.BatteryAh,
+		boolInt(u.Enabled), u.CreatedAt)
+	return u, err
+}
+
+// UpdatePowerUnit replaces every editable column of the unit u.ID.
+func (d *DB) UpdatePowerUnit(u PowerUnit) error {
+	res, err := d.sql.Exec(`UPDATE power_units SET name = ?, site_id = ?, model = ?, host = ?,
+	    port = ?, slave_id = ?, router_id = ?, battery_ah = ?, enabled = ? WHERE id = ?`,
+		u.Name, u.SiteID, u.Model, u.Host, u.Port, u.SlaveID, u.RouterID, u.BatteryAh,
+		boolInt(u.Enabled), u.ID)
+	return powerUnitTouched(res, err)
+}
+
+// DeletePowerUnit removes a unit, and by the foreign keys its history and events.
+func (d *DB) DeletePowerUnit(id string) error {
+	res, err := d.sql.Exec(`DELETE FROM power_units WHERE id = ?`, id)
+	return powerUnitTouched(res, err)
+}
+
+func powerUnitTouched(res sql.Result, err error) error {
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return err
+	} else if n == 0 {
+		return ErrPowerUnitNotFound
+	}
+	return nil
+}
+
+func boolInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+// PowerStat is one measure over one minute.
+type PowerStat struct {
+	Key           string
+	Avg, Min, Max float64
+}
+
+// RecordPowerMinute writes one finished minute of one unit, in one transaction.
+// A minute written twice (a restart inside the minute) is replaced, not doubled.
+func (d *DB) RecordPowerMinute(unitID string, ts int64, polls, ok int, replyMs float64,
+	stats []PowerStat) error {
+	tx, err := d.sql.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.Exec(`INSERT OR REPLACE INTO power_minutes (unit_id, ts, polls, ok, reply_ms)
+	    VALUES (?, ?, ?, ?, ?)`, unitID, ts, polls, ok, replyMs); err != nil {
+		return err
+	}
+	for _, s := range stats {
+		if _, err := tx.Exec(`INSERT OR REPLACE INTO power_samples (unit_id, ts, key, avg, min, max)
+		    VALUES (?, ?, ?, ?, ?, ?)`, unitID, ts, s.Key, s.Avg, s.Min, s.Max); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// PowerEvent is one row of power_events.
+type PowerEvent struct {
+	ID      int64  `json:"id"`
+	UnitID  string `json:"unitId"`
+	Kind    string `json:"kind"`
+	Code    int    `json:"code"`
+	Text    string `json:"text"`
+	Fault   bool   `json:"fault"`
+	Initial bool   `json:"initial"`
+	BeganAt int64  `json:"beganAt"`
+	EndedAt *int64 `json:"endedAt"`
+}
+
+// BeginPowerEvent records a condition that began.
+//
+// A condition already open for the unit (same kind and code) is left as it is:
+// that is the restart case, where the row written before the restart holds the
+// true start and the new process only re-observed it.
+func (d *DB) BeginPowerEvent(e PowerEvent) error {
+	_, err := d.sql.Exec(`INSERT INTO power_events (unit_id, kind, code, text, fault, initial, began_at)
+	    SELECT ?, ?, ?, ?, ?, ?, ?
+	     WHERE NOT EXISTS (SELECT 1 FROM power_events
+	                        WHERE unit_id = ? AND kind = ? AND code = ? AND ended_at IS NULL)`,
+		e.UnitID, e.Kind, e.Code, e.Text, boolInt(e.Fault), boolInt(e.Initial), e.BeganAt,
+		e.UnitID, e.Kind, e.Code)
+	return err
+}
+
+// EndPowerEvent closes the unit's open condition of this kind and code.
+func (d *DB) EndPowerEvent(unitID, kind string, code int, endedAt int64) error {
+	_, err := d.sql.Exec(`UPDATE power_events SET ended_at = ?
+	    WHERE unit_id = ? AND kind = ? AND code = ? AND ended_at IS NULL`,
+		endedAt, unitID, kind, code)
+	return err
+}
+
+// PowerEvents is a unit's events, newest first. Open ones only when openOnly,
+// which is what a restart restores its trackers from.
+func (d *DB) PowerEvents(unitID string, openOnly bool, limit int) ([]PowerEvent, error) {
+	q := `SELECT id, unit_id, kind, code, text, fault, initial, began_at, ended_at
+	        FROM power_events WHERE unit_id = ?`
+	if openOnly {
+		q += ` AND ended_at IS NULL`
+	}
+	rows, err := d.sql.Query(q+` ORDER BY began_at DESC, id DESC LIMIT ?`, unitID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []PowerEvent{}
+	for rows.Next() {
+		var e PowerEvent
+		var fault, initial int
+		if err := rows.Scan(&e.ID, &e.UnitID, &e.Kind, &e.Code, &e.Text, &fault, &initial,
+			&e.BeganAt, &e.EndedAt); err != nil {
+			return nil, err
+		}
+		e.Fault, e.Initial = fault != 0, initial != 0
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
