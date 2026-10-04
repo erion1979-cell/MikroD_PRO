@@ -49,11 +49,11 @@ running → on battery; else output off.
 
 ## Build order
 
-1. Modbus client, tested against a fake converter.
-2. Definition format, loader and the PowerGuard definition, tested against the verified readings.
-3. Pure logic: mode, events, offline rule, minute buckets.
-4. Storage, pollers, server wiring, REST for adding units.
-5. The Power/UPS page and live updates.
+1. Modbus client, tested against a fake converter. **Done.**
+2. Definition format, loader and the PowerGuard definition, tested against the verified readings. **Done.**
+3. Pure logic: mode, events, offline rule, minute buckets. **Done.**
+4. Storage, pollers, server wiring, REST for adding units. **Done.**
+5. The Power/UPS page, live updates, history charts, settings. **Done.**
 6. Notifications.
 7. Dashboard card, Reports tab, CSV export.
 
