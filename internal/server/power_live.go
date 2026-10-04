@@ -25,7 +25,8 @@ func (s *Server) powerWatch(cn *conn, on bool) {
 // powerPush is the pollers' State hook.
 func (s *Server) powerPush(st power.State) {
 	s.power.mu.Lock()
-	site, known := s.power.siteOf[st.UnitID]
+	u, known := s.power.units[st.UnitID]
+	site := siteOf(u)
 	viewers := make([]*conn, 0, len(s.power.watchers))
 	for cn := range s.power.watchers {
 		viewers = append(viewers, cn)

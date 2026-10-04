@@ -100,6 +100,18 @@ func eventKeyFor(f alert.Fired) string {
 // every recovery regardless: see `ChannelSpec.WantsValue`.
 func (s *Server) channelRecipients(routerID, event, ifaceType string,
 	value float64, up bool) []alertdispatch.Recipient {
+	return s.channelRecipientsFor(routerID, event, ifaceType, value, up, func(owner string) bool {
+		ok, err := s.rbac.Can(owner, "router:read", routerID)
+		return err == nil && ok
+	})
+}
+
+// channelRecipientsFor is channelRecipients with the question a user-owned
+// channel must pass made by the caller: a router alert asks whether the owner
+// may read that router, a Power/UPS one whether they may read the unit's site
+// (power_notify.go). `routerID` still scopes a channel narrowed to routers.
+func (s *Server) channelRecipientsFor(routerID, event, ifaceType string,
+	value float64, up bool, may func(owner string) bool) []alertdispatch.Recipient {
 	if s.auditDB == nil {
 		return nil
 	}
@@ -132,11 +144,8 @@ func (s *Server) channelRecipients(routerID, event, ifaceType string,
 		//
 		// The install's own channels are not asked — `_install` is not a user
 		// and has no grants.
-		if r.Owner != db.InstallOwner && s.rbac != nil {
-			ok, err := s.rbac.Can(r.Owner, "router:read", routerID)
-			if err != nil || !ok {
-				continue
-			}
+		if r.Owner != db.InstallOwner && s.rbac != nil && !may(r.Owner) {
+			continue
 		}
 		if !spec.Deliverable() {
 			// SAID OUT LOUD, for the same reason the dispatcher says why it

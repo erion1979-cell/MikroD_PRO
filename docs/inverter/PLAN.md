@@ -54,7 +54,7 @@ running → on battery; else output off.
 3. Pure logic: mode, events, offline rule, minute buckets. **Done.**
 4. Storage, pollers, server wiring, REST for adding units. **Done.**
 5. The Power/UPS page, live updates, history charts, settings. **Done.**
-6. Notifications.
+6. Notifications. **Done.**
 7. Dashboard card, Reports tab, CSV export.
 
 Live testing against a real unit happens on the owner's network, with the read-only

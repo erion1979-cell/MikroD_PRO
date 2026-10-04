@@ -34,9 +34,10 @@ import (
 type powerState struct {
 	mu      sync.Mutex
 	manager *power.Manager
-	// siteOf is each polled unit's site, "" for none, refreshed by powerSync:
-	// what a live update is checked against before it is sent (power_live.go).
-	siteOf map[string]string
+	// units is every stored unit by id, refreshed by powerSync: what a live
+	// update is checked against before it is sent (power_live.go) and what a
+	// notification names (power_notify.go).
+	units map[string]db.PowerUnit
 	// watchers is every socket with the page open.
 	watchers map[*conn]bool
 	// applied is the settings the pollers run with, so a save that changes
@@ -85,6 +86,7 @@ func (s *Server) powerStart(noPool, history bool) {
 					log.Printf("[power] could not record %s on %s: %v", c.Kind, unitID, err)
 				}
 			}
+			s.dispatchPower(unitID, cs)
 		},
 	}
 	if history {
@@ -120,12 +122,12 @@ func (s *Server) powerSync() {
 		log.Printf("[power] could not read units: %v", err)
 		return
 	}
-	sites := map[string]string{}
+	units := map[string]db.PowerUnit{}
 	for _, r := range rows {
-		sites[r.ID] = siteOf(r)
+		units[r.ID] = r
 	}
 	s.power.mu.Lock()
-	s.power.siteOf = sites
+	s.power.units = units
 	s.power.mu.Unlock()
 	m.Sync(powerUnits(rows))
 }

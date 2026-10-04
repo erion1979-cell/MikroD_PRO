@@ -255,7 +255,8 @@ func TestPowerLiveUpdatesFollowSitePermission(t *testing.T) {
 	p.grant("pw-view@site-1")
 	srv := p.srv
 	srv.power.mu.Lock()
-	srv.power.siteOf = map[string]string{"u1": "site-1", "u2": "site-2"}
+	one, two := "site-1", "site-2"
+	srv.power.units = map[string]db.PowerUnit{"u1": {ID: "u1", SiteID: &one}, "u2": {ID: "u2", SiteID: &two}}
 	srv.power.mu.Unlock()
 
 	client := hub.NewClient("viewer", 16)

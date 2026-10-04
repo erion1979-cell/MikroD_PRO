@@ -59,6 +59,12 @@ func (s *Server) powerMay(sess *Session, access, siteID string) bool {
 	if sess.AuthMode == "none" {
 		return true
 	}
+	return s.powerMayUser(s.userIDFor(sess.Username), access, siteID)
+}
+
+// powerMayUser is powerMay for a user id: what a notification channel's owner
+// is asked (power_notify.go), where there is no session.
+func (s *Server) powerMayUser(userID, access, siteID string) bool {
 	if s.rbac == nil || !s.rbac.Available() {
 		return false
 	}
@@ -66,7 +72,7 @@ func (s *Server) powerMay(sess *Session, access, siteID string) bool {
 	if siteID != "" {
 		sites = []string{siteID}
 	}
-	return permitted(s.rbac.CanPageOnSites(s.userIDFor(sess.Username), powerPage, access, sites))
+	return permitted(s.rbac.CanPageOnSites(userID, powerPage, access, sites))
 }
 
 // powerSession is the signed-in session, with the database present.

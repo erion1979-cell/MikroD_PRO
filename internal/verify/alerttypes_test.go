@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"mikrodash/internal/alert"
+	"mikrodash/internal/power"
 )
 
 // THE ALERT CATALOGUE AGAINST THE RULES THAT RAISE THE ALERTS.
@@ -69,7 +70,7 @@ func TestEveryAlertTypeRaisedHasACatalogueEntry(t *testing.T) {
 	// Every display string the catalogue knows, on both the down and up sides.
 	known := map[string]bool{}
 	for _, ty := range alert.Types() {
-		if ty.Backup {
+		if ty.Backup || ty.Power {
 			continue
 		}
 		known[ty.Down] = true
@@ -97,7 +98,7 @@ func TestEveryCatalogueEntryIsRaisedBySomeRule(t *testing.T) {
 
 	stale := []string{}
 	for _, ty := range alert.Types() {
-		if ty.Backup {
+		if ty.Backup || ty.Power {
 			continue
 		}
 		if !raised[ty.Down] {
@@ -129,7 +130,7 @@ func TestEveryCatalogueEntryIsRaisedBySomeRule(t *testing.T) {
 // plus the runner's kind, pinned by TestTheBackupEventsMatchTheBackupRunner.
 func TestACatalogueKeyIsTheStoredFormOfItsDownType(t *testing.T) {
 	for _, ty := range alert.Types() {
-		if ty.Backup {
+		if ty.Backup || ty.Power {
 			continue
 		}
 		if got := alert.StoredType(ty.Down); got != ty.Key {
@@ -189,3 +190,37 @@ func TestTheBackupEventsMatchTheBackupRunner(t *testing.T) {
 // the catalogue to agree with. The two ledgers above - against the evaluator's
 // literals, and against the backup runner's kinds - are what remain, and they
 // are the ones that were load-bearing.
+
+// THE POWER/UPS EVENTS AGAINST THE POWER MODULE, BOTH WAYS. They are raised by
+// internal/power's conditions through NoticeKey, not by the evaluator, so the
+// rule-source scan above cannot see them; this is their ledger. A catalogue
+// entry no condition maps to is a toggle that never fires, and a condition
+// mapped to a key the catalogue lacks is one no channel can subscribe to.
+func TestThePowerEventsMatchThePowerModule(t *testing.T) {
+	mapped := map[string]bool{}
+	for _, k := range power.Kinds {
+		key := power.NoticeKey(k)
+		if key == "" {
+			continue
+		}
+		mapped[key] = true
+		ty, ok := alert.TypeByKey(key)
+		if !ok || !ty.Power {
+			t.Errorf("internal/power sends %s as %q, which is not a Power entry in alert.Types()", k, key)
+		}
+	}
+	if len(mapped) == 0 {
+		t.Fatal("internal/power maps no condition to a notification - this ledger measures nothing")
+	}
+	for _, ty := range alert.Types() {
+		if !ty.Power {
+			continue
+		}
+		if !mapped[ty.Key] {
+			t.Errorf("alert.Types() lists %s as a Power/UPS event, and no condition is sent as it", ty.Key)
+		}
+		if ty.Down == "" || ty.Up == "" {
+			t.Errorf("%s needs both a Down and an Up name: every Power/UPS condition ends", ty.Key)
+		}
+	}
+}

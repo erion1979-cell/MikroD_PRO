@@ -40,6 +40,12 @@ type Type struct {
 	// `(*Server).dispatchBackup`, not from the evaluator, and so are checked
 	// against a different source by the ledger.
 	Backup bool
+	// Power marks the Power/UPS module's events (docs/inverter/PLAN.md). Like
+	// the backup events they record no `alert_events` row - the module keeps
+	// its own events, shown on its page - so their key is not a StoredType;
+	// internal/power's NoticeKey is what raises them, and the ledger checks
+	// them against it.
+	Power bool
 }
 
 // types is the catalogue. Ordered for display rather than alphabetically: the
@@ -109,6 +115,37 @@ var types = []Type{
 		Key:   "backup_fail",
 		Label: "Backup failed", Backup: true,
 		Desc: "A scheduled backup did not complete",
+	},
+
+	// ── POWER/UPS ──────────────────────────────────────────────────────────
+	//
+	// Raised by internal/power's conditions (NoticeKey) and sent by the
+	// server's dispatchPower, never by the evaluator. A channel narrowed to
+	// routers hears about a unit only when the unit is linked to one of them.
+	{
+		Key: "power_mains_lost", Down: "Mains Lost", Up: "Mains Restored", Power: true,
+		Label: "Power/UPS: mains lost / restored",
+		Desc:  "An inverter or UPS lost mains and switched to battery, or mains came back",
+	},
+	{
+		Key: "power_event", Down: "Unit Event", Up: "Unit Event Cleared", Power: true,
+		Label: "Power/UPS: event code",
+		Desc:  "An inverter or UPS raised a protection or notice code (overload, low battery, ECO...), or cleared it",
+	},
+	{
+		Key: "power_output_off", Down: "Output Off", Up: "Output On", Power: true,
+		Label: "Power/UPS: output off / on",
+		Desc:  "An inverter or UPS switched its output off, or back on",
+	},
+	{
+		Key: "power_battery_low", Down: "Battery Low", Up: "Battery Recovered", Power: true,
+		Label: "Power/UPS: battery low",
+		Desc:  "Running on battery at or below the Battery low threshold in Settings",
+	},
+	{
+		Key: "power_not_responding", Down: "Unit Not Responding", Up: "Unit Responding", Power: true,
+		Label: "Power/UPS: not responding",
+		Desc:  "An inverter or UPS stopped answering its converter, or answered again",
 	},
 }
 
