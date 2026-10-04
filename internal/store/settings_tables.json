@@ -102,6 +102,9 @@
     "ztpLanUrl": "",
     "ztpPrivateKey": "",
     "ztpInstanceId": "",
+    "powerPollSec": 5,
+    "powerOfflineAfter": 3,
+    "powerBatteryLowPct": 20,
     "hiddenAreas": []
   },
   "defaultsOrder": [
@@ -206,6 +209,9 @@
     "ztpLanUrl",
     "ztpPrivateKey",
     "ztpInstanceId",
+    "powerPollSec",
+    "powerOfflineAfter",
+    "powerBatteryLowPct",
     "hiddenAreas"
   ],
   "encrypted": [

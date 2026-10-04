@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"mikrodash/internal/db"
 	"mikrodash/internal/hub"
@@ -304,5 +305,26 @@ func TestPowerLiveUpdatesFollowSitePermission(t *testing.T) {
 	push()
 	if got := received(); len(got) != 0 {
 		t.Errorf("after leaving the page the viewer received %v", got)
+	}
+}
+
+// SAVING SETTINGS REACHES THE POLLERS. A setting rendered, validated and saved
+// but never read is the commonest defect in this codebase (AI_CONTEXT.md), so
+// this goes through the real save route rather than asking powerSettings.
+func TestSavedPowerSettingsReachThePollers(t *testing.T) {
+	p := newPowerAPI(t)
+	p.grant("administrator@global")
+	code, body := p.do("POST", "/api/settings", `{"powerPollSec":10,"powerOfflineAfter":5,"powerBatteryLowPct":30}`)
+	if code != http.StatusOK {
+		t.Fatalf("save: %d %v", code, body)
+	}
+	if got := p.srv.power.applied; got.Interval != 10*time.Second || got.OfflineAfter != 5 || got.BatteryLowPct != 30 {
+		t.Errorf("after the save the pollers run with %+v", got)
+	}
+	// Outside the bounds is refused by the write, and the pollers keep theirs.
+	if code, _ := p.do("POST", "/api/settings", `{"powerPollSec":1}`); code == http.StatusOK {
+		if p.srv.power.applied.Interval != 10*time.Second {
+			t.Errorf("a 1 s interval reached the pollers: %v", p.srv.power.applied.Interval)
+		}
 	}
 }

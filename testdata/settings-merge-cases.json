@@ -107,6 +107,9 @@
         "ztpLanUrl": "",
         "ztpPrivateKey": "",
         "ztpInstanceId": "",
+        "powerPollSec": 5,
+        "powerOfflineAfter": 3,
+        "powerBatteryLowPct": 20,
         "hiddenAreas": []
       }
     },
@@ -219,6 +222,9 @@
         "ztpLanUrl": "",
         "ztpPrivateKey": "",
         "ztpInstanceId": "",
+        "powerPollSec": 5,
+        "powerOfflineAfter": 3,
+        "powerBatteryLowPct": 20,
         "hiddenAreas": []
       }
     },
@@ -331,6 +337,9 @@
         "ztpLanUrl": "",
         "ztpPrivateKey": "",
         "ztpInstanceId": "",
+        "powerPollSec": 5,
+        "powerOfflineAfter": 3,
+        "powerBatteryLowPct": 20,
         "hiddenAreas": []
       }
     },
@@ -444,6 +453,9 @@
         "ztpLanUrl": "",
         "ztpPrivateKey": "",
         "ztpInstanceId": "",
+        "powerPollSec": 5,
+        "powerOfflineAfter": 3,
+        "powerBatteryLowPct": 20,
         "hiddenAreas": []
       }
     },
@@ -557,6 +569,9 @@
         "ztpLanUrl": "",
         "ztpPrivateKey": "",
         "ztpInstanceId": "",
+        "powerPollSec": 5,
+        "powerOfflineAfter": 3,
+        "powerBatteryLowPct": 20,
         "hiddenAreas": []
       }
     },
@@ -670,6 +685,9 @@
         "ztpLanUrl": "",
         "ztpPrivateKey": "",
         "ztpInstanceId": "",
+        "powerPollSec": 5,
+        "powerOfflineAfter": 3,
+        "powerBatteryLowPct": 20,
         "hiddenAreas": []
       }
     },
@@ -783,6 +801,9 @@
         "ztpLanUrl": "",
         "ztpPrivateKey": "",
         "ztpInstanceId": "",
+        "powerPollSec": 5,
+        "powerOfflineAfter": 3,
+        "powerBatteryLowPct": 20,
         "hiddenAreas": []
       }
     },
@@ -896,6 +917,9 @@
         "ztpLanUrl": "",
         "ztpPrivateKey": "",
         "ztpInstanceId": "",
+        "powerPollSec": 5,
+        "powerOfflineAfter": 3,
+        "powerBatteryLowPct": 20,
         "hiddenAreas": []
       }
     },
@@ -1007,6 +1031,9 @@
         "ztpLanUrl": "",
         "ztpPrivateKey": "",
         "ztpInstanceId": "",
+        "powerPollSec": 5,
+        "powerOfflineAfter": 3,
+        "powerBatteryLowPct": 20,
         "hiddenAreas": []
       }
     },
@@ -1118,6 +1145,9 @@
         "ztpLanUrl": "",
         "ztpPrivateKey": "",
         "ztpInstanceId": "",
+        "powerPollSec": 5,
+        "powerOfflineAfter": 3,
+        "powerBatteryLowPct": 20,
         "hiddenAreas": []
       }
     },
@@ -1229,6 +1259,9 @@
         "ztpLanUrl": "",
         "ztpPrivateKey": "",
         "ztpInstanceId": "",
+        "powerPollSec": 5,
+        "powerOfflineAfter": 3,
+        "powerBatteryLowPct": 20,
         "hiddenAreas": []
       }
     },
@@ -1342,6 +1375,9 @@
         "ztpLanUrl": "",
         "ztpPrivateKey": "",
         "ztpInstanceId": "",
+        "powerPollSec": 5,
+        "powerOfflineAfter": 3,
+        "powerBatteryLowPct": 20,
         "hiddenAreas": []
       }
     },
@@ -1453,6 +1489,9 @@
         "ztpLanUrl": "",
         "ztpPrivateKey": "",
         "ztpInstanceId": "",
+        "powerPollSec": 5,
+        "powerOfflineAfter": 3,
+        "powerBatteryLowPct": 20,
         "hiddenAreas": []
       }
     },
@@ -1564,6 +1603,9 @@
         "ztpLanUrl": "",
         "ztpPrivateKey": "",
         "ztpInstanceId": "",
+        "powerPollSec": 5,
+        "powerOfflineAfter": 3,
+        "powerBatteryLowPct": 20,
         "hiddenAreas": []
       }
     },
@@ -1675,6 +1717,9 @@
         "ztpLanUrl": "",
         "ztpPrivateKey": "",
         "ztpInstanceId": "",
+        "powerPollSec": 5,
+        "powerOfflineAfter": 3,
+        "powerBatteryLowPct": 20,
         "hiddenAreas": []
       }
     },
@@ -1786,6 +1831,9 @@
         "ztpLanUrl": "",
         "ztpPrivateKey": "",
         "ztpInstanceId": "",
+        "powerPollSec": 5,
+        "powerOfflineAfter": 3,
+        "powerBatteryLowPct": 20,
         "hiddenAreas": []
       }
     },
@@ -1898,6 +1946,9 @@
         "ztpLanUrl": "",
         "ztpPrivateKey": "",
         "ztpInstanceId": "",
+        "powerPollSec": 5,
+        "powerOfflineAfter": 3,
+        "powerBatteryLowPct": 20,
         "hiddenAreas": []
       }
     },
@@ -2010,6 +2061,9 @@
         "ztpLanUrl": "",
         "ztpPrivateKey": "",
         "ztpInstanceId": "",
+        "powerPollSec": 5,
+        "powerOfflineAfter": 3,
+        "powerBatteryLowPct": 20,
         "hiddenAreas": []
       }
     },
@@ -2121,6 +2175,9 @@
         "ztpLanUrl": "",
         "ztpPrivateKey": "",
         "ztpInstanceId": "",
+        "powerPollSec": 5,
+        "powerOfflineAfter": 3,
+        "powerBatteryLowPct": 20,
         "hiddenAreas": []
       }
     },
@@ -2232,6 +2289,9 @@
         "ztpLanUrl": "",
         "ztpPrivateKey": "",
         "ztpInstanceId": "",
+        "powerPollSec": 5,
+        "powerOfflineAfter": 3,
+        "powerBatteryLowPct": 20,
         "hiddenAreas": []
       }
     },
@@ -2343,6 +2403,9 @@
         "ztpLanUrl": "",
         "ztpPrivateKey": "",
         "ztpInstanceId": "",
+        "powerPollSec": 5,
+        "powerOfflineAfter": 3,
+        "powerBatteryLowPct": 20,
         "hiddenAreas": []
       }
     },
@@ -2454,6 +2517,9 @@
         "ztpLanUrl": "",
         "ztpPrivateKey": "",
         "ztpInstanceId": "",
+        "powerPollSec": 5,
+        "powerOfflineAfter": 3,
+        "powerBatteryLowPct": 20,
         "hiddenAreas": []
       }
     }

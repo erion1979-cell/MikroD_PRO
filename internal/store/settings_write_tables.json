@@ -152,6 +152,18 @@
     "ztpListenPort": [
       1,
       65535
+    ],
+    "powerPollSec": [
+      2,
+      300
+    ],
+    "powerOfflineAfter": [
+      1,
+      20
+    ],
+    "powerBatteryLowPct": [
+      5,
+      90
     ]
   },
   "strFields": [

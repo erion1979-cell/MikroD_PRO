@@ -94,7 +94,10 @@ export const FORM_FIELDS: Record<FieldKind, readonly string[]> = {
     "ztpEndpoint",
     "ztpLanUrl",
     "ztpListenPort",
-    "ztpSubnet"
+    "ztpSubnet",
+    "powerBatteryLowPct",
+    "powerOfflineAfter",
+    "powerPollSec"
   ],
   "checkGuarded": []
 };

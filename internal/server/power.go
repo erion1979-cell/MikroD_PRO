@@ -24,6 +24,7 @@ import (
 	"net"
 	"strconv"
 	"sync"
+	"time"
 
 	"mikrodash/internal/db"
 	"mikrodash/internal/power"
@@ -38,6 +39,9 @@ type powerState struct {
 	siteOf map[string]string
 	// watchers is every socket with the page open.
 	watchers map[*conn]bool
+	// applied is the settings the pollers run with, so a save that changes
+	// none of them restarts nothing.
+	applied power.Settings
 }
 
 // powerStart builds and starts the pollers, unless -no-pool or there is no
@@ -94,8 +98,10 @@ func (s *Server) powerStart(noPool, history bool) {
 			}
 		}
 	}
+	set := s.powerSettings()
 	s.power.mu.Lock()
-	s.power.manager = power.NewManager(hooks, power.DefaultSettings())
+	s.power.manager = power.NewManager(hooks, set)
+	s.power.applied = set
 	s.power.mu.Unlock()
 	s.powerSync()
 }
@@ -157,5 +163,49 @@ func (s *Server) powerShutdown() {
 	s.power.mu.Unlock()
 	if m != nil {
 		m.Stop()
+	}
+}
+
+// powerSettings reads the three Power/UPS settings, each clamped to the bounds
+// the settings write accepts (settings_write_tables.json), with the defaults
+// for anything absent or unreadable.
+func (s *Server) powerSettings() power.Settings {
+	set := power.DefaultSettings()
+	if s.store == nil {
+		return set
+	}
+	cfg, err := s.mergedSettings()
+	if err != nil {
+		return set
+	}
+	num := func(key string, def, lo, hi float64) float64 {
+		v, ok := cfg[key].(float64)
+		if !ok {
+			if i, isInt := cfg[key].(int); isInt {
+				v, ok = float64(i), true
+			}
+		}
+		if !ok || v < lo || v > hi {
+			return def
+		}
+		return v
+	}
+	set.Interval = time.Duration(num("powerPollSec", set.Interval.Seconds(), 2, 300)) * time.Second
+	set.OfflineAfter = int(num("powerOfflineAfter", float64(set.OfflineAfter), 1, 20))
+	set.BatteryLowPct = num("powerBatteryLowPct", set.BatteryLowPct, 5, 90)
+	return set
+}
+
+// powerApplySettings is called after every settings save: the pollers take
+// new values at once, and are left alone when nothing of theirs changed.
+func (s *Server) powerApplySettings() {
+	set := s.powerSettings()
+	s.power.mu.Lock()
+	m := s.power.manager
+	same := s.power.applied == set
+	s.power.applied = set
+	s.power.mu.Unlock()
+	if m != nil && !same {
+		m.SetSettings(set)
 	}
 }
