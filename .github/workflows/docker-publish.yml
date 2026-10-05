@@ -132,7 +132,14 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # A release made by hand on GitHub (which is also how a tag gets made
+        # when the tag cannot be pushed) already exists, and a second create
+        # fails the run after the images have published. Leave that one be.
         run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists; leaving it as it is."
+            exit 0
+          fi
           gh release create "$GITHUB_REF_NAME" \
             --title "$GITHUB_REF_NAME" \
             --notes-file release_notes.md
