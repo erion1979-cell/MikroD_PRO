@@ -38,6 +38,7 @@
 - **Live, not refreshed.** MikroDash holds one connection per router and pushes changes to the browser over a WebSocket the moment they happen.
 - **Kind to small routers.** Each RouterOS menu is read once however many pages want it, collectors sleep when nobody is looking, and every router can be switched between streaming and polling.
 - **One binary, one volume.** A Go server with the TypeScript frontend built in, shipped as a multi-arch image. No database server, no agents on the router, no CDN: every asset is self-hosted, so it works on an isolated network.
+- **Watches the power too.** Inverters and UPSs on the same network are read over Modbus TCP, so a mains cut shows up beside the routers it affects, with history, reports and notifications.
 - **Safe by design.** Credentials are encrypted at rest, every write is permission-checked and audited, and changes that could cut the dashboard off from the router are refused or warned about first.
 
 ---
@@ -125,6 +126,7 @@ A worked deployment on a separate Docker host is in [`docs/deploy-r5s.md`](docs/
 | 🛰️ **Multi-router fleet** | Manage many routers from one install. Switch from the header, where devices are grouped by site, with no reload. The **Devices** page shows the whole fleet as cards, a sortable list or a world map, filterable by site: each device's 24-hour connectivity, last backup, open alerts and available updates at a glance. Click one for its own overview - connectivity history and outages, live usage, ports, clients and recent alerts - without leaving the device you are on. |
 | 🔐 **Users and access control** | Per-user accounts with editable roles (a read and write matrix per page), granted to users or groups over everything, a site, or a single router. Or sign in with an existing account: **single sign-on** against any OpenID Connect provider (Entra ID, Okta, Keycloak, Authentik), with the role decided by a claim your provider sends. The password form never goes away, so the local administrator is always a way back in. |
 | 🔔 **Alerts and notifications** | Interface up/down, WireGuard peers, CPU, ping loss, NetWatch hosts, router online/offline, RouterOS updates, configuration drift and backup failures, delivered through notification **channels** you create: SMTP, or a webhook URL for Telegram, Pushbullet, ntfy, Discord, Slack, Gotify, Pushover, a generic JSON endpoint, or an Apprise server for everything else. Each channel picks its own alert types, devices, thresholds and cooldown, and scheduled reports go out through one. |
+| 🔋 **Power/UPS** | Inverters and UPSs (PowerGuard first) monitored over Modbus TCP through an Ethernet-to-RS485 converter: live input, output, load, battery and temperatures, the unit's mode (on mains, on battery, fault, output off), its event codes, and when it stops answering. History charts for 24 hours to 30 days, outages and faults with their durations, a Dashboard card, a Reports tab and CSV export. Mains lost, faults, output off, battery low and not responding go out through the same notification channels as router alerts. Read-only: MikroDash cannot write to a unit. |
 | 📈 **History and reports** | Traffic, ping, bandwidth, alerts and connectivity recorded to SQLite, viewable by date range, exported to CSV or PDF, and emailed on a daily, weekly or monthly schedule. Click any interface for its own traffic: live for the last minute, or up to thirty days back for the interfaces you choose to record. |
 | 🪄 **Zero-touch provisioning** | Add a router before it exists: a wizard makes a short script for it, and when the router runs it, it calls home, joins the fleet and receives its Config Management template on its own. Remote routers dial in over a WireGuard tunnel built into MikroDash, from behind NAT anywhere; a generic script brings in a whole rollout, each router waiting for your approval. |
 | 🧩 **Config Management** | A library of 20 ready-made configuration templates (firewalls, VLANs, a guest network, WireGuard, DNS, queues, monitoring) plus your own, captured from a router or written in the editor. Every setting has a working default. Deploy to one router or the fleet: a syntax check first, a restore point, a canary router before the rest, an automatic revert if a change cuts MikroDash off, and History and Drift afterwards. |
@@ -143,7 +145,7 @@ MikroDash has more than fifty pages. Here they are by area (the sidebar can grou
 
 | Area | Pages |
 |---|---|
-| **Overview** | Dashboard, Devices, Config Management, Network Topology, WAN |
+| **Overview** | Dashboard, Devices, Power/UPS, Config Management, Network Topology, WAN |
 | **Wireless** | Wifi Networks, Wifi Clients, Wifi Map (draw your site and see clients around each access point), CAPsMAN (both the `wifi` and legacy stacks) |
 | **Network** | Interfaces, IP Addresses, VLANs, Bridges, DHCP, DHCP Servers, DHCP Clients, DNS, IP Pools, Interface Lists, ARP |
 | **Routing** | Routing (routes and BGP), Routing Tables, Routing Rules, OSPF, VRRP |
@@ -208,6 +210,21 @@ Every table sorts by its headers, except the ones where order is meaning (firewa
 </details>
 
 <details>
+<summary><strong>Power/UPS in detail</strong></summary>
+
+<br>
+
+- **Add a unit** on the Power/UPS page: its name, site, model, the converter's IP address and port (502 by default) and the unit's slave ID. The converter type does not matter as long as it runs in Modbus TCP gateway mode; the ⓘ on the form says how to set one up, and [`docs/inverter/converters.md`](docs/inverter/converters.md) lists the ones checked.
+- **One connection per converter.** Units behind the same converter are read one after another over it, every 5 seconds by default.
+- **Read-only by construction.** The Modbus client can only build read requests, so nothing on the page can change a unit's settings.
+- **Statuses everyone agrees on:** On mains, On battery, Fault, Output off, and Not responding after 3 missed readings. A battery at or below 20% while on battery raises Battery low. The interval, the misses and the percentage are under Settings, Power/UPS.
+- **Per site.** A unit belongs to a site, and a user sees and manages only the units on sites their role covers.
+- **History needs `-history`**, as router history does (the Docker image has it): one row per minute with the average, lowest and highest value. `-no-pool` stops the polling, for a second MikroDash watching the same fleet.
+- **Notifications:** tick the Power/UPS events on a notification channel to receive them. They are shown on the Power/UPS page, not in the router alert bell.
+
+</details>
+
+<details>
 <summary><strong>Keyboard shortcuts</strong></summary>
 
 <br>
@@ -232,6 +249,13 @@ Every table sorts by its headers, except the ones where order is meaning (firewa
 ## 📸 Screenshots
 
 <table>
+  <tr>
+    <td width="50%"><img src="screenshots/power-ups.png" alt="Power/UPS units"><p align="center"><sub>Power/UPS: every unit and its status</sub></p></td>
+    <td width="50%"><img src="screenshots/power-ups-unit.png" alt="Power/UPS unit"><p align="center"><sub>Power/UPS: one unit, live, with 24-hour history</sub></p></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="screenshots/power-ups-report.png" alt="Power/UPS report"><p align="center"><sub>Reports: a unit's outages, faults and extremes over any date range</sub></p></td>
+  </tr>
   <tr>
     <td width="50%"><img src="screenshots/connections_map.png" alt="Connections map"><p align="center"><sub>Connections map</sub></p></td>
     <td width="50%"><img src="screenshots/connections.png" alt="Connections"><p align="center"><sub>Connections</sub></p></td>
