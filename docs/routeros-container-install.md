@@ -3,13 +3,11 @@
 How to run MikroDash directly on a MikroTik router, using RouterOS's own container
 support rather than the **Apps** menu.
 
-Every step here came from a real install ([#124](https://github.com/SecOps-7/MikroDash/issues/124)),
+Every step here came from a real install ([#124](https://github.com/SecOps-7/MikroDash/issues/124) in the original MikroDash project),
 including the two that are easy to get wrong and give you no useful error when you do.
 
-> **Why not the Apps menu?** MikroTik maintain that catalogue themselves, so the entry
-> there can lag well behind the current release. Check the version it gives you at
-> `http://<container-ip>:3081/healthz`. If it is not the version you expect, install as a
-> container using this guide, which always pulls the current image.
+> **Why not the Apps menu?** Its entry is the original MikroDash, without Power/UPS, in
+> MikroTik's own copy of the catalogue. Install this fork as a container using this guide.
 
 ---
 
@@ -148,7 +146,7 @@ mounts. Replace `usb1` with your own disk name from `/disk/print`.
 **RouterOS 7.21 and later:**
 
 ```routeros
-/container/add remote-image=ghcr.io/secops-7/mikrodash:latest \
+/container/add remote-image=ghcr.io/erion1979-cell/mikrodash:latest \
   interface=veth_mikrodash root-dir=usb1/mikrodash \
   mountlists=mikrodash_data \
   logging=yes start-on-boot=yes comment="MikroDash"
@@ -272,7 +270,7 @@ http://172.16.10.2:3081/healthz
 | **Container will not start** | No DNS in `/ip/dns`, or `tmpdir` pointing at internal flash with too little space. Check `/log/print where topics~"container"`. |
 | **Asked to create an account after every update** | No `/data` mount. See Persistent storage above. |
 | **Image will not pull** | RouterOS defaults `registry-url` to `https://lscr.io/`. It normally detects `ghcr.io` from the image name; if it does not, set it explicitly with `/container/config/set registry-url=https://ghcr.io`. |
-| **Wrong version after Update in the Apps menu** | That is MikroTik's catalogue copy, not this image. Install as a container using this guide. |
+| **Wrong version after Update in the Apps menu** | That is the original MikroDash from MikroTik's catalogue, not this fork's image. Install as a container using this guide. |
 
 To start over completely:
 

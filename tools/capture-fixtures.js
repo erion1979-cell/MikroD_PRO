@@ -27,7 +27,7 @@
  *    a fixture is committed to a public repository, and "probably fine" is not a
  *    standard to write secrets against.
  *
- * 2. NOTHING IDENTIFYING IS EVER WRITTEN. github.com/SecOps-7/MikroDash is
+ * 2. NOTHING IDENTIFYING IS EVER WRITTEN. github.com/erion1979-cell/MikroD_PRO is
  *    public. A raw capture carries the operator's SSIDs, MAC addresses, serial
  *    numbers, LAN topology and WAN address — a map of a private home network.
  *    Every such value is replaced before it reaches disk.

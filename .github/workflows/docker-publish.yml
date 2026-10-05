@@ -14,7 +14,7 @@ on:
 env:
   REGISTRY: ghcr.io
   # Must be lowercase — Docker registry names are case-sensitive
-  IMAGE_NAME: secops-7/mikrodash
+  IMAGE_NAME: erion1979-cell/mikrodash
 
 jobs:
   # THE SAME SUITE test.yml RUNS, as a prerequisite. A `v*.*.*` tag publishes the

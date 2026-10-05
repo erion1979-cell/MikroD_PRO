@@ -353,10 +353,11 @@ and Docker tags sort lexically: 0.8.10 follows 0.8.9, and the release after 0.8.
 
 **This fork's releases are the original's number plus `-pro.N`** (agreed 2026-10-05): `0.8.71-pro.1`,
 then `-pro.2` for the next release on the same base, and back to `-pro.1` after merging a new
-original release (`0.8.72-pro.1`). A hyphen, never `+`, which Docker tags cannot hold. The first such
-release must also point the About page's update check (`internal/server/about_api.go`) at this fork's
-releases, and widen the tag pattern in `.github/workflows/docker-publish.yml`, which matches only
-`vX.Y.Z`.
+original release (`0.8.72-pro.1`). A hyphen, never `+`, which Docker tags cannot hold. Links, the
+published image (`ghcr.io/erion1979-cell/mikrodash`) and the About page's update check point at this
+fork; the original is named only as its credit and in history (CHANGELOG, issue references). The first
+`-pro` release must still widen the tag pattern in `.github/workflows/docker-publish.yml`, which
+matches only `vX.Y.Z`.
 
 ---
 

@@ -4,16 +4,16 @@ Thanks for your interest in contributing. Small changes are as welcome as large 
 
 ## Before You Start
 
-- Check [open issues](https://github.com/SecOps-7/MikroDash/issues) to avoid duplicating work
-- [Good first issue](https://github.com/SecOps-7/MikroDash/labels/good%20first%20issue) is a reasonable place to start
+- Check [open issues](https://github.com/erion1979-cell/MikroD_PRO/issues) to avoid duplicating work
+- [Good first issue](https://github.com/erion1979-cell/MikroD_PRO/labels/good%20first%20issue) is a reasonable place to start
 - For large changes, open an issue first so we can agree on the approach before you spend time on it
 - If something is unclear, ask in an issue - that is not a bother
 
 ## Development Setup
 
 ```sh
-git clone https://github.com/SecOps-7/MikroDash.git
-cd MikroDash
+git clone https://github.com/erion1979-cell/MikroD_PRO.git
+cd MikroD_PRO
 ```
 
 You need **Go 1.27+**. **Node 20+** is needed only to type-check and test the frontend: the frontend itself is built by a Go program, and nothing Node-related runs at runtime.
@@ -79,6 +79,6 @@ Do not worry about getting the conventions above exactly right first time. If so
 
 ## Reporting Bugs
 
-Use the [bug report template](https://github.com/SecOps-7/MikroDash/issues/new?template=bug_report.yml). Router model and RouterOS version help a lot, since behaviour varies between versions.
+Use the [bug report template](https://github.com/erion1979-cell/MikroD_PRO/issues/new?template=bug_report.yml). Router model and RouterOS version help a lot, since behaviour varies between versions.
 
 For security vulnerabilities, please follow [SECURITY.md](SECURITY.md) instead of opening a public issue.

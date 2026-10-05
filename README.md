@@ -10,11 +10,15 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/SecOps-7/MikroDash/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/SecOps-7/MikroDash?style=flat-square&color=2563eb"></a>
-  <a href="https://github.com/SecOps-7/MikroDash/pkgs/container/mikrodash"><img alt="Docker image on GHCR" src="https://img.shields.io/badge/docker-ghcr.io%2Fsecops--7%2Fmikrodash-2496ED?style=flat-square&logo=docker&logoColor=white"></a>
+  <sub>A fork of <a href="https://github.com/SecOps-7/MikroDash">MikroDash</a> that adds Power/UPS monitoring.</sub>
+</p>
+
+<p align="center">
+  <a href="https://github.com/erion1979-cell/MikroD_PRO/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/erion1979-cell/MikroD_PRO?include_prereleases&style=flat-square&color=2563eb"></a>
+  <a href="https://github.com/erion1979-cell/MikroD_PRO/pkgs/container/mikrodash"><img alt="Docker image on GHCR" src="https://img.shields.io/badge/docker-ghcr.io%2Ferion1979--cell%2Fmikrodash-2496ED?style=flat-square&logo=docker&logoColor=white"></a>
   <img alt="Platforms" src="https://img.shields.io/badge/platforms-amd64%20%7C%20arm64%20%7C%20arm%2Fv7-6b7280?style=flat-square">
   <img alt="RouterOS v7" src="https://img.shields.io/badge/RouterOS-v7-e11d48?style=flat-square">
-  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/github/license/SecOps-7/MikroDash?style=flat-square&color=16a34a"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/github/license/erion1979-cell/MikroD_PRO?style=flat-square&color=16a34a"></a>
 </p>
 
 <p align="center">
@@ -49,7 +53,7 @@
 # docker-compose.yml
 services:
   mikrodash:
-    image: ghcr.io/secops-7/mikrodash:latest
+    image: ghcr.io/erion1979-cell/mikrodash:latest
     restart: unless-stopped
     ports:
       - "3081:3081"
@@ -68,7 +72,7 @@ docker compose up -d
 Open **http://localhost:3081**. On first run MikroDash asks you to create an administrator account, then walks you through adding your first router and testing the connection. No `.env` file is needed.
 
 > [!TIP]
-> Images are published for `linux/amd64`, `linux/arm64` and `linux/arm/v7` on every release tag, so `latest` always means the latest release, never unreleased work. Pin a version with `ghcr.io/secops-7/mikrodash:<version>`.
+> Images are published for `linux/amd64`, `linux/arm64` and `linux/arm/v7` on every release tag, so `latest` always means the latest release, never unreleased work. Pin a version with `ghcr.io/erion1979-cell/mikrodash:<version>`.
 
 <details>
 <summary><strong>Run it on the router itself (RouterOS container)</strong></summary>
@@ -78,14 +82,14 @@ Open **http://localhost:3081**. On first run MikroDash asks you to create an adm
 MikroDash can run on the MikroTik it monitors, using RouterOS's own container support:
 
 ```routeros
-/container/add remote-image=ghcr.io/secops-7/mikrodash:latest \
+/container/add remote-image=ghcr.io/erion1979-cell/mikrodash:latest \
   interface=veth_mikrodash root-dir=usb1/mikrodash \
   mountlists=mikrodash_data start-on-boot=yes comment="MikroDash"
 ```
 
 Follow [`docs/routeros-container-install.md`](docs/routeros-container-install.md) for the full walkthrough: enabling container mode, the veth and bridge, the `input` chain firewall rule (its absence is the usual cause of a bare "timed out" when adding the router) and the `/data` mount, without which every repull discards your database.
 
-The RouterOS **Apps** menu installs MikroDash from MikroTik's own copy of the catalogue, which they refresh on their own schedule and which can lag behind the current release. Adding it as an ordinary container, as above, always pulls the latest release.
+The RouterOS **Apps** menu installs the original MikroDash, without Power/UPS, from MikroTik's own copy of the catalogue. Add this fork as an ordinary container, as above.
 
 </details>
 
@@ -97,8 +101,8 @@ The RouterOS **Apps** menu installs MikroDash from MikroTik's own copy of the ca
 Only Docker is needed on the host:
 
 ```bash
-git clone https://github.com/SecOps-7/MikroDash.git
-cd MikroDash
+git clone https://github.com/erion1979-cell/MikroD_PRO.git
+cd MikroD_PRO
 docker build -t mikrodash:local .
 docker run -d --name mikrodash --restart unless-stopped \
   -p 3081:3081 -v mikrodash-data:/data mikrodash:local
@@ -507,7 +511,7 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) for the local setup and the project's co
 
 ## 🤝 Contributing
 
-Issues and pull requests are welcome, from typo fixes to new pages. Check the [open issues](https://github.com/SecOps-7/MikroDash/issues) first, and open one before a large change so the approach can be agreed. See [CONTRIBUTING.md](CONTRIBUTING.md).
+Issues and pull requests are welcome, from typo fixes to new pages. Check the [open issues](https://github.com/erion1979-cell/MikroD_PRO/issues) first, and open one before a large change so the approach can be agreed. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 

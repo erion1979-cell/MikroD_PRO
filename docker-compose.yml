@@ -14,7 +14,7 @@ services:
     # that ended at the v0.8.0 cutover.
     #
     # The local name had also drifted from the PUBLISHED one, which has always
-    # been `ghcr.io/secops-7/mikrodash` — see .github/workflows/docker-publish.yml.
+    # been `ghcr.io/erion1979-cell/mikrodash` in this fork — see .github/workflows/docker-publish.yml.
     # These now agree.
     #
     # The compose PROJECT name above stays `mikrodash`, so the data volume is
