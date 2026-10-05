@@ -2,6 +2,50 @@
 
 All notable changes to MikroDash will be documented in this file.
 
+## [0.8.71-pro.1] - Power/UPS monitoring, and this fork's own home
+
+The first release of this fork, built on MikroDash 0.8.71. Everything in 0.8.71 is here; this
+adds the following.
+
+### New
+
+- **Power/UPS page.** Inverters and UPSs (PowerGuard first) read over Modbus TCP through an
+  Ethernet-to-RS485 converter: live input, output, load, battery and temperatures, a power-flow
+  view, the unit's mode (on mains, on battery, fault, output off) and its event codes. Units are
+  added with the converter's address, port and slave ID; the converter type does not matter, and
+  the info button on the form explains how to set one up. Read-only: MikroDash cannot write to a
+  unit.
+- **Statuses and events.** A unit is Not responding after 3 missed readings, and Battery low at
+  20% while on battery; both, and the polling interval, are under Settings, Power/UPS. Every
+  outage, fault and silence is kept with its start, end and duration.
+- **History.** One row a minute (average, lowest, highest) under `-history`, charted for 24 hours,
+  7 or 30 days, with gaps where nothing was read.
+- **Notifications.** Mains lost, unit events, output off, battery low and not responding go out
+  through the notification channels: tick them on a channel to receive them. They appear on the
+  Power/UPS page, not in the router alert bell.
+- **A Power/UPS Dashboard card**, a **Power/UPS tab on the Reports page** (outages, time on
+  battery, faults, answered polls and extremes over any date range) and **CSV export** of a
+  unit's history and events.
+- **Per site.** A unit belongs to a site, and a user sees and manages only the units on sites
+  their role covers.
+- **`powerprobe`**, a read-only command-line check of a unit from any computer on its network,
+  which also builds for Windows.
+- **An ARMv5 image for the hEX refresh**, built with
+  `--platform linux/arm/v5 --build-arg RUNTIME=busybox:1.37`. See
+  `docs/routeros-container-install.md`.
+
+### Changed
+
+- Links, the published image (`ghcr.io/erion1979-cell/mikrodash`) and the update check on the
+  About page point at this fork. The README names the original project as its source.
+- The donation buttons on the About page say they pay the original developer.
+- The Docker image copies its certificates and time zone data instead of installing them, so its
+  runtime base can be swapped.
+
+### Internal
+
+- Schema v35: Power/UPS units, minute history and events.
+
 ## [0.8.71] - A Devices page that shows the fleet at a glance, and Credential Profiles
 
 ### New

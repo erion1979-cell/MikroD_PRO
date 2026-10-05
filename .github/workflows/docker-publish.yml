@@ -9,6 +9,10 @@ on:
       # which the semver tags below come out empty while `latest` (enabled for
       # any refs/tags/v…) was still pushed, moving it to an unversioned build.
       - 'v[0-9]+.[0-9]+.[0-9]+'
+      # THIS FORK'S RELEASES: the original's number plus -pro.N (CLAUDE.md,
+      # "Versioning rule"). The semver tag is the full 0.8.71-pro.1, and
+      # metadata-action skips {{major}}.{{minor}} for a pre-release suffix.
+      - 'v[0-9]+.[0-9]+.[0-9]+-pro.[0-9]+'
   workflow_dispatch:
 
 env:
