@@ -31,10 +31,10 @@ yet converted, which can appear once per dashboard and follow the selected devic
 
 ## Phases
 
-1. **Named dashboards.** **Done.** The dashboards are stored per user in a new `user_layouts` row,
-   `dashboards`, validated by the server. The first is built from the existing layout, so nothing
-   changes for anyone until they add a second. The tab strip sits beside the title; switching
-   applies that dashboard's layout to the grid, and the existing editor edits the active one.
+1. **Named dashboards.** **Done.** The dashboards after the first are stored per user in a new
+   `user_layouts` row, `dashboards` (migration 36), validated by the server; the first keeps its own
+   row, so nothing changes for anyone until they add a second. The tab strip sits above the grid;
+   switching applies that dashboard's layout, and the existing editor edits and saves the active one.
 2. **Cards for any device.** A per-connection set of watched `(router, card type)` pairs, served the
    way the device modal is (`internal/server/peek.go`): joining a demand room on each watched router
    keeps the collectors those cards need running, and one declared event carries each router's
