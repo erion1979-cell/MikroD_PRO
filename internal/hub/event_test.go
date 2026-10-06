@@ -73,20 +73,46 @@ func TestForwardRefusesAPayloadOfTheWrongType(t *testing.T) {
 	h.Add(c)
 	h.Join(c, "room")
 
-	h.Forward([]string{"room"}, ev, "not an int")
+	h.Forward("r-1", []string{"room"}, ev, "not an int")
 	if len(c.Send) != 0 {
 		t.Fatal("a string was delivered under an event declared to carry an int")
 	}
-	h.Forward([]string{"room"}, ev, 3)
+	h.Forward("r-1", []string{"room"}, ev, 3)
 	if len(c.Send) != 1 {
 		t.Fatalf("a correctly typed payload was not delivered (queue %d)", len(c.Send))
 	}
 	var env struct {
-		Event string `json:"event"`
-		Data  int    `json:"data"`
+		Event  string `json:"event"`
+		Data   int    `json:"data"`
+		Router string `json:"router"`
 	}
-	if err := json.Unmarshal(<-c.Send, &env); err != nil || env.Event != "test:forward" || env.Data != 3 {
-		t.Errorf("frame = %+v (err %v), want test:forward carrying 3", env, err)
+	if err := json.Unmarshal(<-c.Send, &env); err != nil || env.Event != "test:forward" || env.Data != 3 ||
+		env.Router != "r-1" {
+		t.Errorf("frame = %+v (err %v), want test:forward carrying 3 from r-1", env, err)
+	}
+}
+
+// TestOnlyARoutersFramesAreTagged - a forwarded event names its router, a
+// reply to the client names none unless it is about another router, and a
+// frame with no router carries no field at all (docs/dashboards/PLAN.md).
+func TestOnlyARoutersFramesAreTagged(t *testing.T) {
+	ev := Declare[int]("test:tag")
+	h := New()
+	c := NewClient("ws-1", 4)
+	h.Add(c)
+	ev.Send(h, c, 1)
+	ev.SendFrom(h, c, "r-2", 2)
+	ev.Broadcast(h, "nobody", 3)
+	h.Join(c, "room")
+	ev.Broadcast(h, "room", 4)
+	for _, want := range []string{
+		`{"event":"test:tag","data":1}`,
+		`{"event":"test:tag","data":2,"router":"r-2"}`,
+		`{"event":"test:tag","data":4}`,
+	} {
+		if got := string(<-c.Send); got != want {
+			t.Errorf("frame %s, want %s", got, want)
+		}
 	}
 }
 

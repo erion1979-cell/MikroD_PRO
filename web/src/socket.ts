@@ -29,10 +29,15 @@ interface Lifecycle { connect: null; disconnect: null; connect_error: null }
 export type AllEvents = Events & HandEvents & Lifecycle;
 
 type Handler = (data: any) => void;
+type RouterHandler = (data: any, router: string) => void;
 
 export class Socket {
   private ws: WebSocket | null = null;
   private handlers = new Map<string, Handler[]>();
+  /** Listeners that take every router's frames: see onRouter. */
+  private routerHandlers = new Map<string, RouterHandler[]>();
+  /** The router this page last asked to select. See `fire`. */
+  private selected = '';
   /** Queued while the socket is down, so a page:focus during a reconnect is not lost. */
   private pending: string[] = [];
   private attempt = 0;
@@ -71,7 +76,25 @@ export class Socket {
     else this.handlers.set(event, [cb as Handler]);
   }
 
+  /**
+   * Listen for an event from ANY router, with the router it came from: a
+   * frame tagged by the server names it, and an untagged one is the selected
+   * router's. For cards that follow a device of their own
+   * (docs/dashboards/PLAN.md); everything else uses `on`.
+   */
+  onRouter<E extends keyof AllEvents>(event: E, cb: (data: AllEvents[E], router: string) => void): void {
+    const list = this.routerHandlers.get(event);
+    if (list) list.push(cb as RouterHandler);
+    else this.routerHandlers.set(event, [cb as RouterHandler]);
+  }
+
+  /** The router this page last asked to select, or '' before the first. */
+  selectedRouter(): string {
+    return this.selected;
+  }
+
   emit(event: string, data?: unknown): void {
+    if (event === 'router:select' && typeof data === 'string') this.selected = data;
     const frame = JSON.stringify({ event, data: data === undefined ? null : data });
     if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(frame);
     else if (this.pending.length < 64) this.pending.push(frame);
@@ -83,7 +106,25 @@ export class Socket {
     this.ws?.close();
   }
 
-  private fire(event: string, data: unknown): void {
+  // ── A FRAME FROM ANOTHER ROUTER REACHES ONLY onRouter ───────────────────
+  //
+  // The server tags what a router's session sends with that router
+  // (internal/hub Envelope.Router). A dashboard watching other routers joins
+  // their rooms, so their `traffic:update` and `system:update` arrive on this
+  // socket too - and every `on` listener was written for the SELECTED router,
+  // with no way to tell. So `on` hears a tagged frame only when it names the
+  // selected router. That also drops the frames still in flight from the
+  // previous router after a switch, which used to land on the new one's cards.
+  private fire(event: string, data: unknown, router = ''): void {
+    for (const cb of this.routerHandlers.get(event) || []) {
+      try {
+        cb(data, router || this.selected);
+      } catch (e) {
+        console.error('[socket] handler threw for event', event, e);
+      }
+    }
+    if (router && router !== this.selected) return;
+
     // The last payload of each event, kept for the DOM-equality gate.
     //
     // PLAN.md makes "renders identically to the Node page" the acceptance
@@ -146,13 +187,13 @@ export class Socket {
     };
 
     ws.onmessage = (ev) => {
-      let msg: { event?: string; data?: unknown };
+      let msg: { event?: string; data?: unknown; router?: string };
       try {
         msg = JSON.parse(ev.data as string);
       } catch {
         return; // a frame we cannot parse is not a reason to tear anything down
       }
-      if (msg.event) this.fire(msg.event, msg.data);
+      if (msg.event) this.fire(msg.event, msg.data, typeof msg.router === 'string' ? msg.router : '');
     };
 
     ws.onclose = () => {

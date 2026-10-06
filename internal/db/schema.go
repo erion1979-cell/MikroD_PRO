@@ -315,7 +315,11 @@ var portMigrations = map[int][]string{
 	// SAFE TO RUN TWICE, as the rule at the top asks: over a database already
 	// in the new shape the copy moves the same columns between two tables of
 	// the same shape, and the swap ends where it started.
+	//
+	// A database with no `user_layouts` at all (a test's minimal schema; no
+	// install lacks it) gets an empty one first, so the copy has a source.
 	36: {
+		`CREATE TABLE IF NOT EXISTS user_layouts (` + userLayoutsColumns + `)`,
 		`CREATE TABLE IF NOT EXISTS user_layouts_v36 (` + userLayoutsColumns + `)`,
 		`INSERT OR IGNORE INTO user_layouts_v36 (user_id, kind, data, updated_at)
 		   SELECT user_id, kind, data, updated_at FROM user_layouts`,

@@ -28,7 +28,7 @@ func TestDeliverAfterRemoveDoesNotPanic(t *testing.T) {
 
 	// Every fan-out path, because they all reach `deliver` with a `*Client` a
 	// caller was already holding.
-	h.send(c, "system:update", map[string]any{"cpu": 1})
+	h.send(c, "", "system:update", map[string]any{"cpu": 1})
 	h.broadcast("room", "system:update", map[string]any{"cpu": 1})
 	h.broadcastAll("system:update", map[string]any{"cpu": 1})
 }
@@ -67,8 +67,8 @@ func TestAFrameAfterRemoveIsNotCountedAsDropped(t *testing.T) {
 	h.Add(c)
 	h.Remove(c)
 
-	h.send(c, "one", 1)
-	h.send(c, "two", 2)
+	h.send(c, "", "one", 1)
+	h.send(c, "", "two", 2)
 	if got := c.Dropped(); got != 0 {
 		t.Errorf("Dropped = %d after removal; a disconnected browser is not a slow one", got)
 	}

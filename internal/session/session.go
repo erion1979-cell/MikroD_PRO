@@ -1047,7 +1047,7 @@ func (m *Manager) Acquire(routerID string) (*Session, error) {
 		m.history.Record(s.RouterID, event, payload)
 
 		if sub == "" {
-			m.h.Forward([]string{"router-" + s.RouterID}, e, payload)
+			m.h.Forward(s.RouterID, []string{"router-" + s.RouterID}, e, payload)
 			return
 		}
 		if strings.Contains(sub, ",") {
@@ -1056,10 +1056,10 @@ func (m *Manager) Acquire(routerID string) (*Session, error) {
 			for _, one := range subs {
 				rooms = append(rooms, room+strings.TrimSpace(one))
 			}
-			m.h.Forward(rooms, e, payload)
+			m.h.Forward(s.RouterID, rooms, e, payload)
 			return
 		}
-		m.h.Forward([]string{room + sub}, e, payload)
+		m.h.Forward(s.RouterID, []string{room + sub}, e, payload)
 	})
 	s.dns = collect.NewDNS(reader{s: s}, emit, s.conf().Poll["dns"])
 	// THE OCCUPANCY ORACLE IS A CLOSURE over this session, not a captured hub:

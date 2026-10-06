@@ -35,6 +35,14 @@ import (
 type Envelope struct {
 	Event string `json:"event"`
 	Data  any    `json:"data"`
+	// Router is the router a collector's event came from, set on everything a
+	// router's session forwards and on replays made for a router the client
+	// has not selected (docs/dashboards/PLAN.md). Empty on events that are not
+	// a router's, and on the replays a selection makes. The browser hands a
+	// tagged frame to its ordinary listeners only when it names the selected
+	// router (web/src/socket.ts), so a dashboard watching other routers cannot
+	// feed their numbers to a card that follows the selection.
+	Router string `json:"router,omitempty"`
 }
 
 // Client is one browser connection. The transport lives in package server; this
@@ -314,7 +322,7 @@ func (h *Hub) broadcastExcept(room string, except *Client, event string, payload
 // payload goes to three rooms at once, and a viewer with the Interfaces page
 // open inside the dashboard is in two of them. Looping Broadcast would send
 // that client the same frame twice.
-func (h *Hub) broadcastRooms(rooms []string, event string, payload any) {
+func (h *Hub) broadcastRooms(rooms []string, router, event string, payload any) {
 	h.mu.RLock()
 	seen := map[*Client]bool{}
 	members := make([]*Client, 0)
@@ -330,7 +338,7 @@ func (h *Hub) broadcastRooms(rooms []string, event string, payload any) {
 	if len(members) == 0 {
 		return // nobody watching; do not pay for the marshal
 	}
-	b, err := json.Marshal(Envelope{Event: event, Data: payload})
+	b, err := json.Marshal(Envelope{Event: event, Data: payload, Router: router})
 	if err != nil {
 		log.Printf("[hub] cannot marshal %s: %v", event, err)
 		return
@@ -342,8 +350,8 @@ func (h *Hub) broadcastRooms(rooms []string, event string, payload any) {
 
 // send delivers one event to one client — the reply to something it asked for,
 // and the replay of a last payload when it opens a page.
-func (h *Hub) send(c *Client, event string, payload any) {
-	b, err := json.Marshal(Envelope{Event: event, Data: payload})
+func (h *Hub) send(c *Client, router, event string, payload any) {
+	b, err := json.Marshal(Envelope{Event: event, Data: payload, Router: router})
 	if err != nil {
 		log.Printf("[hub] cannot marshal %s: %v", event, err)
 		return

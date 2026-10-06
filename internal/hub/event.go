@@ -103,7 +103,12 @@ func Events() []Declared {
 }
 
 // Send delivers the event to one client.
-func (e Event[T]) Send(h *Hub, c *Client, p T) { h.send(c, e.name, p) }
+func (e Event[T]) Send(h *Hub, c *Client, p T) { h.send(c, "", e.name, p) }
+
+// SendFrom delivers the event to one client, tagged with the router it is
+// about: the replay a dashboard watch makes for a router the client has not
+// selected. See Envelope.Router.
+func (e Event[T]) SendFrom(h *Hub, c *Client, router string, p T) { h.send(c, router, e.name, p) }
 
 // Broadcast delivers the event to everybody in a room.
 func (e Event[T]) Broadcast(h *Hub, room string, p T) { h.broadcast(room, e.name, p) }
@@ -119,7 +124,7 @@ func (e Event[T]) BroadcastExcept(h *Hub, room string, except *Client, p T) {
 
 // BroadcastRooms delivers the event once to each client in any of the rooms.
 func (e Event[T]) BroadcastRooms(h *Hub, rooms []string, p T) {
-	h.broadcastRooms(rooms, e.name, p)
+	h.broadcastRooms(rooms, "", e.name, p)
 }
 
 // Relay is how a producer that does not own the hub sends: through a closure
@@ -151,12 +156,12 @@ func (e Event[T]) Emit(r Relay, room string, p T) {
 // so a failure here means something built a Named and an `any` by another
 // route. That is dropped and logged rather than sent, because the browser's
 // type for the event would be wrong about it.
-func (h *Hub) Forward(rooms []string, e Named, payload any) {
+func (h *Hub) Forward(router string, rooms []string, e Named, payload any) {
 	if !e.accepts(payload) {
 		log.Printf("[hub] %s: a %T is not its declared payload type; not sent", e.Name(), payload)
 		return
 	}
-	h.broadcastRooms(rooms, e.Name(), payload)
+	h.broadcastRooms(rooms, router, e.Name(), payload)
 }
 
 // ── NO NULL ARRAYS ──────────────────────────────────────────────────────────
