@@ -3857,3 +3857,38 @@
 /* A card copy's device picker, in its header (pages/dashboard-device-cards.ts). */
 .dash-dev-pick{margin-left:auto;max-width:11rem;background:var(--bg-input, transparent);color:var(--text-muted);border:1px solid var(--border);border-radius:6px;font-size:.68rem;padding:.1rem .3rem;cursor:pointer}
 .dash-dev-pick:hover{color:var(--accent-rx)}
+
+/* ── Power/UPS: a unit that is not answering (pages/power-ups.ts) ──
+   Everything saying "Not responding" is red and pulses; its last reading stays
+   on screen, greyed, so it cannot pass for a live one. */
+@keyframes pw-pulse-border{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent-err) 55%,transparent)}
+  50%{box-shadow:0 0 0 4px color-mix(in srgb,var(--accent-err) 25%,transparent)}}
+@keyframes pw-pulse-text{0%,100%{opacity:1}50%{opacity:.35}}
+.pw-banner-down,.pw-node-down{border:2px solid var(--accent-err)!important;
+  background:color-mix(in srgb,var(--accent-err) 10%,var(--bg-card));animation:pw-pulse-border 1.6s ease-in-out infinite}
+.pw-banner-down .pw-banner-title{color:var(--accent-err)}
+.vpn-hs-badge.pw-pulse{animation:pw-pulse-text 1.6s ease-in-out infinite}
+.pw-age-alert{color:var(--accent-err)!important;font-weight:600;animation:pw-pulse-text 1.6s ease-in-out infinite}
+.pw-is-stale .pw-node-v,.pw-is-stale .pw-big,.pw-is-stale .pw-kv span:last-child{color:var(--text-muted)}
+.pw-is-stale .pw-node-mid .pw-node-v{color:var(--accent-err)}
+.pw-is-stale #pwBatBar{background:var(--text-muted)!important}
+.pw-chip-unknown{color:var(--text-muted);border-style:dashed}
+.pw-row-stale .pw-num{color:var(--text-muted)}
+.dc-pw-row-down{border-left:3px solid var(--accent-err);padding-left:.4rem}
+.dc-pw-row-down .dc-pw-vals{color:var(--text-muted)}
+@media (prefers-reduced-motion:reduce){
+  .pw-banner-down,.pw-node-down,.vpn-hs-badge.pw-pulse,.pw-age-alert{animation:none}
+}
+/* The power flow on a phone: three equal columns with no arrows between them
+   (the battery link below still shows), smaller figures, and a value that never
+   breaks inside a number ("230.0 V" used to wrap across three lines). */
+@media (max-width:620px){
+  .pw-flow{grid-template-columns:repeat(3,minmax(0,1fr));column-gap:.4rem}
+  .pw-flow .pw-arrow{display:none}
+  .pw-battery-link{grid-column:1 / -1;justify-self:center;min-width:50%}
+  .pw-node{padding:.45rem .25rem}
+  .pw-node-label{font-size:.6rem}
+  .pw-node-v{font-size:.82rem;white-space:nowrap}
+  .pw-node-mid .pw-node-v{white-space:normal;font-size:.78rem}
+  .pw-node-sub{font-size:.62rem}
+}

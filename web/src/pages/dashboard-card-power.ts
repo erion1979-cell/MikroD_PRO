@@ -28,7 +28,7 @@ export function powerCardHTML(list: readonly Unit[]): string {
     .sort((a, b) => STATUS[statusOf(a)].rank - STATUS[statusOf(b)].rank || a.name.localeCompare(b.name))
     .map((u) => {
       const v = (u.state?.hasReading && u.state.values) || {};
-      return `<div class="dc-pw-row">
+      return `<div class="dc-pw-row${statusOf(u) === 'down' ? ' dc-pw-row-down' : ''}">
         <span class="dc-pw-name">${esc(u.name)}</span>${pill(statusOf(u))}
         <span class="dc-pw-vals"><span title="Input voltage">In ${fmt(v.input_v)} V</span>
         <span title="Battery">Bat ${fmt(v.battery_pct)} %</span>
