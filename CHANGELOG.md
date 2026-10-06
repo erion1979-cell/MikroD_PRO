@@ -2,6 +2,29 @@
 
 All notable changes to MikroDash will be documented in this file.
 
+## [0.8.71-pro.4] - MikroDash asks its own questions
+
+Built on MikroDash 0.8.71, like 0.8.71-pro.3.
+
+### Changed
+
+- **Every confirmation, prompt and notice is MikroDash's own dialog**, not the browser's pop-up
+  ("192.168.20.26:3081 says"): deleting backups, sites, users, groups, roles, channels and
+  devices, the Config Management and provisioning questions, the WAN lease release and renew,
+  the typed router-name confirmations before a reboot or restore, and the dashboard tabs. Each
+  has a title, a red button where it deletes or reboots, keeps its line breaks, and closes with
+  Escape or a click outside.
+- **Power/UPS unit page:** the unit's box reads "Model - Brand" (the brand is dropped on a
+  phone), and the lines between the boxes are plain lines, the moving particles showing the
+  direction.
+- **Power/UPS unit form:** a new unit starts on the PowerGuard HP-10212, and the **?** beside
+  Model always shows, saying so when a model has no technical details on file.
+
+### Fixed
+
+- On a phone, a long status such as "Converter unreachable" no longer breaks mid-word in the
+  unit's box.
+
 ## [0.8.71-pro.3] - The power flow moves, and the first PowerGuard product
 
 Built on MikroDash 0.8.71, like 0.8.71-pro.2.
