@@ -921,6 +921,7 @@ export interface PowerState {
   polls: number;
   answered: number;
   lastError: string;
+  cause: string;
   open: PowerCond[];
 }
 

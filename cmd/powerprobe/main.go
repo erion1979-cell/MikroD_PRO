@@ -122,7 +122,7 @@ func poll(c *modbus.Client, mdl *model.Model, slave byte, tr *power.Tracker, raw
 		got, err := c.Read(slave, r.Function, r.Start, r.Count)
 		if err != nil {
 			fmt.Printf("%s  NO READING: %v\n", stamp, err)
-			report(tr.Failure(began.UnixMilli()))
+			report(tr.Failure(began.UnixMilli(), power.CauseOf(err)))
 			return
 		}
 		regs = append(regs, got)
@@ -131,7 +131,7 @@ func poll(c *modbus.Client, mdl *model.Model, slave byte, tr *power.Tracker, raw
 	r, err := mdl.Decode(regs)
 	if err != nil {
 		fmt.Printf("%s  UNDECODABLE: %v\n", stamp, err)
-		report(tr.Failure(began.UnixMilli()))
+		report(tr.Failure(began.UnixMilli(), power.CauseUnknown))
 		return
 	}
 

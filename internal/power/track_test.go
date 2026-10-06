@@ -151,16 +151,16 @@ func TestTheThresholdIsTheTrackersSetting(t *testing.T) {
 func TestNotRespondingAfterThreeFailuresDatedToTheFirst(t *testing.T) {
 	tr := NewTracker()
 	tr.Success(reading(t, nil), 1000)
-	expect(t, "fail 1", tr.Failure(6000), "")
-	expect(t, "fail 2", tr.Failure(11000), "")
+	expect(t, "fail 1", tr.Failure(6000, CauseUnknown), "")
+	expect(t, "fail 2", tr.Failure(11000, CauseUnknown), "")
 	if !tr.Online() {
 		t.Error("offline after two failures")
 	}
-	expect(t, "fail 3", tr.Failure(16000), "+not_responding@6000")
+	expect(t, "fail 3", tr.Failure(16000, CauseUnknown), "+not_responding@6000")
 	if tr.Online() {
 		t.Error("online after three failures")
 	}
-	expect(t, "fail 4", tr.Failure(21000), "")
+	expect(t, "fail 4", tr.Failure(21000, CauseUnknown), "")
 	expect(t, "back", tr.Success(reading(t, nil), 26000), "-not_responding@26000(6000)")
 	if !tr.Online() {
 		t.Error("not online after answering again")
@@ -170,26 +170,26 @@ func TestNotRespondingAfterThreeFailuresDatedToTheFirst(t *testing.T) {
 func TestAFailureBetweenGoodPollsResetsTheCount(t *testing.T) {
 	tr := NewTracker()
 	tr.Success(reading(t, nil), 1000)
-	tr.Failure(2000)
-	tr.Failure(3000)
+	tr.Failure(2000, CauseUnknown)
+	tr.Failure(3000, CauseUnknown)
 	tr.Success(reading(t, nil), 4000)
-	tr.Failure(5000)
-	expect(t, "two more failures", tr.Failure(6000), "")
-	expect(t, "third in a row", tr.Failure(7000), "+not_responding@5000")
+	tr.Failure(5000, CauseUnknown)
+	expect(t, "two more failures", tr.Failure(6000, CauseUnknown), "")
+	expect(t, "third in a row", tr.Failure(7000, CauseUnknown), "+not_responding@5000")
 }
 
 func TestAUnitThatNeverAnsweredIsInitiallyNotResponding(t *testing.T) {
 	tr := NewTracker()
-	tr.Failure(1000)
-	tr.Failure(2000)
-	expect(t, "third", tr.Failure(3000), "~not_responding@1000")
+	tr.Failure(1000, CauseUnknown)
+	tr.Failure(2000, CauseUnknown)
+	expect(t, "third", tr.Failure(3000, CauseUnknown), "~not_responding@1000")
 }
 
 func TestWhatHappenedDuringSilenceIsSettledByTheNextReading(t *testing.T) {
 	tr := NewTracker()
 	tr.Success(reading(t, battery(70)), 1000)
 	for ts := int64(2000); ts <= 4000; ts += 1000 {
-		tr.Failure(ts)
+		tr.Failure(ts, CauseUnknown)
 	}
 	// Mains came back while nobody could see: it ends at the first reading
 	// that shows it, alongside the silence.

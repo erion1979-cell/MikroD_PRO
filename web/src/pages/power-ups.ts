@@ -74,8 +74,24 @@ export function statusOf(u: Unit): Status {
   return 'waiting';
 }
 
-export function pill(s: Status): string {
-  return `<span class="vpn-hs-badge ${STATUS[s].pill}">${STATUS[s].label}</span>`;
+export function pill(s: Status, label: string = STATUS[s].label): string {
+  return `<span class="vpn-hs-badge ${STATUS[s].pill}">${esc(label)}</span>`;
+}
+
+/**
+ * A unit's status in words. "Not responding" says which device is silent when
+ * the failure tells (internal/power/cause.go): no connection to the converter,
+ * or the converter answering for an inverter that does not.
+ */
+export function statusLabel(u: Unit): string {
+  const s = statusOf(u);
+  if (s === 'down' && u.state?.cause === 'converter') return 'Converter unreachable';
+  if (s === 'down' && u.state?.cause === 'unit') return 'Inverter not responding';
+  return STATUS[s].label;
+}
+
+export function unitPill(u: Unit): string {
+  return pill(statusOf(u), statusLabel(u));
 }
 
 const fmt = (v: number | undefined, digits = 1): string =>
@@ -114,7 +130,9 @@ export function eventLine(c: Cond, now = Date.now()): { title: string; sub: stri
         ? { title: 'Mains lost, then restored', sub: since + ' · outage lasted ' + lasted, tone: 'ok' }
         : { title: 'Mains lost - running on battery', sub: since + ' · ' + lasted + ' so far', tone: 'warn' };
     case 'not_responding':
-      return { title: 'Not responding', sub: since + (ended ? ' · back after ' + lasted : ' · ' + lasted + ' so far'), tone: 'idle' };
+      // The text says which device was silent (internal/power/cause.go);
+      // events from before it was recorded read plain "Not responding".
+      return { title: c.text || 'Not responding', sub: since + (ended ? ' · back after ' + lasted : ' · ' + lasted + ' so far'), tone: 'idle' };
     case 'event':
       return {
         title: c.text + ' (' + String(c.code).padStart(2, '0') + ')',
@@ -251,7 +269,7 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
       <tr class="pw-row${statusOf(r.unit) === 'down' ? ' pw-row-stale' : ''}" data-pwunit="${esc(r.unit.id)}" tabindex="0">
         <td><b>${esc(r.name)}</b>${r.unit.enabled ? '' : ' <span class="muted-note">(disabled)</span>'}</td>
         <td>${esc(r.site)}</td>
-        <td>${pill(statusOf(r.unit))}</td>
+        <td>${unitPill(r.unit)}</td>
         <td class="pw-num">${r.input == null ? '—' : fmt(r.input) + ' V'}</td>
         <td class="pw-num">${r.output == null ? '—' : fmt(r.output) + ' V'}</td>
         <td class="pw-num">${r.load == null ? '—' : fmt(r.load, 0) + ' %'}</td>
@@ -375,7 +393,7 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
 
     el('pwUnitSite')!.textContent = siteName(u.siteId);
     el('pwUnitName')!.textContent = u.name;
-    el('pwUnitOnline')!.innerHTML = st ? (st.online ? '<span class="vpn-hs-badge hs-ok">Online</span>' : pill('down')) : pill('idle');
+    el('pwUnitOnline')!.innerHTML = st ? (st.online ? '<span class="vpn-hs-badge hs-ok">Online</span>' : unitPill(u)) : pill('idle');
     const age = el('pwUnitAge')!;
     age.textContent = st?.lastOk ? 'Last reading ' + ago(st.lastOk) : (down ? 'No reading yet' : '');
     age.classList.toggle('pw-age-alert', down);
@@ -386,7 +404,7 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
     banner.className = 'pw-banner pw-banner-' + s;
     const openEvent = st?.open.find((c) => c.kind === 'event');
     const openMains = st?.open.find((c) => c.kind === 'mains_lost');
-    let title = STATUS[s].label;
+    let title = statusLabel(u);
     let sub = '';
     if (s === 'fault' && openEvent) {
       title = 'Event ' + String(openEvent.code).padStart(2, '0') + ' - ' + openEvent.text;
@@ -397,8 +415,13 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
     } else if (s === 'mains') {
       title = 'Normal - running on mains';
       sub = st?.eventCode ? st.eventText : 'No active events';
+    } else if (s === 'down' && st?.cause === 'converter') {
+      sub = 'No connection to the converter at ' + u.host + ':' + u.port +
+        ' - it is off, unplugged or off the network. The inverter behind it cannot be seen.';
+    } else if (s === 'down' && st?.cause === 'unit') {
+      sub = 'The converter at ' + u.host + ':' + u.port + ' answers, but the inverter (slave ' + u.slaveId +
+        ') does not: it is switched off, or its RS485 wiring is broken.';
     } else if (s === 'down') {
-      title = 'Not responding';
       sub = st?.lastError ? st.lastError : 'No Modbus reply';
     } else if (s === 'idle') {
       sub = u.enabled ? 'Not read by this server' : 'Polling is switched off for this unit';
@@ -423,7 +446,7 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
     el('pwFlow')!.innerHTML = `
       <div class="pw-node"><div class="pw-node-label">Mains input</div><div class="pw-node-v">${fmt(v.input_v)} V</div><div class="pw-node-sub">${fmt(v.input_hz)} Hz</div></div>
       <div class="pw-arrow ${mainsOn ? 'is-on' : ''}"></div>
-      <div class="pw-node pw-node-mid${down ? ' pw-node-down' : ''}"><div class="pw-node-label">${u.producerName ? esc(u.producerName) : 'Unit'}</div><div class="pw-node-v pw-tone-${s === 'mains' ? 'ok' : s === 'battery' ? 'warn' : 'bad'}">${STATUS[s].label}</div><div class="pw-node-sub">DC bus ${fmt(v.dc_bus_a)} A</div></div>
+      <div class="pw-node pw-node-mid${down ? ' pw-node-down' : ''}"><div class="pw-node-label">${u.producerName ? esc(u.producerName) : 'Unit'}</div><div class="pw-node-v pw-tone-${s === 'mains' ? 'ok' : s === 'battery' ? 'warn' : 'bad'}">${esc(statusLabel(u))}</div><div class="pw-node-sub">DC bus ${fmt(v.dc_bus_a)} A</div></div>
       <div class="pw-arrow ${f.output_on && !down ? 'is-on' : ''} ${s === 'fault' ? 'is-bad' : ''}"></div>
       <div class="pw-node"><div class="pw-node-label">Output / load</div><div class="pw-node-v">${fmt(v.output_v)} V</div><div class="pw-node-sub">${fmt(v.output_a)} A · ${fmt(v.load_pct, 0)} %</div></div>
       <div class="pw-battery-link ${fromBattery ? 'is-on' : ''}"><div class="pw-node"><div class="pw-node-label">Battery</div><div class="pw-node-v">${fmt(v.battery_v)} V · ${fmt(v.battery_pct, 0)} %</div></div></div>`;
@@ -454,7 +477,8 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
     const success = st && st.polls ? Math.round((st.answered / st.polls) * 1000) / 10 : null;
     const router = u.routerId ? routers.find((r) => r.id === u.routerId) : undefined;
     el('pwConn')!.innerHTML = '<b>Connection</b>' + [
-      ['Converter', u.host + ':' + u.port], ['Slave ID', String(u.slaveId)], ['RS485', u.serial || '—'],
+      ['Converter', u.host + ':' + u.port + (!down ? '' : st?.cause === 'converter' ? ' (unreachable)'
+        : st?.cause === 'unit' ? ' (answering)' : '')], ['Slave ID', String(u.slaveId)], ['RS485', u.serial || '—'],
       ['Reply time', st?.answered ? Math.round(st.replyMs) + ' ms' : '—'],
       ['Success', success == null ? '—' : success + ' %'],
       ['Model', (u.producerName + ' ' + u.modelName).trim() || u.model],

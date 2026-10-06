@@ -183,8 +183,9 @@ func (t *Tracker) Success(r model.Reading, now int64) []Change {
 //
 // Conditions other than "not responding" are left as they were: nobody can see
 // whether mains came back while the unit was unreachable, so the next reading
-// decides, compared with the last one before the silence.
-func (t *Tracker) Failure(now int64) []Change {
+// decides, compared with the last one before the silence. `why` words the
+// condition when it opens.
+func (t *Tracker) Failure(now int64, why Cause) []Change {
 	if t.open == nil {
 		t.open = map[condKey]openCond{}
 	}
@@ -199,7 +200,7 @@ func (t *Tracker) Failure(now int64) []Change {
 	if _, already := t.open[k]; already {
 		return nil
 	}
-	c := Cond{Kind: KindNotResponding, Text: "Not responding"}
+	c := Cond{Kind: KindNotResponding, Text: why.text()}
 	t.open[k] = openCond{cond: c, since: t.firstFail}
 	return []Change{{Cond: c, Began: true, At: t.firstFail, Initial: !t.seen}}
 }

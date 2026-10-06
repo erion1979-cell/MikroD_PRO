@@ -62,7 +62,7 @@ func (c *fakeClient) Read(slave byte, fn modbus.Function, start, count uint16) (
 	c.n.fns[fn]++
 	c.n.reads[c.addr+"/"+string(rune('0'+slave))]++
 	if c.n.down[c.addr] {
-		return nil, errors.New("i/o timeout")
+		return nil, &modbus.ConnectError{Addr: c.addr, Err: errors.New("connection refused")}
 	}
 	regs, ok := c.n.regs[c.addr][slave]
 	if !ok {
@@ -175,7 +175,7 @@ func TestAPollFeedsStateChangesAndHistory(t *testing.T) {
 		m.pollUnit(c, u)
 	}
 	s = rec.stateOf("u1")
-	if s.Online || s.LastError == "" || s.Polls != 5 || s.Answered != 2 {
+	if s.Online || s.LastError == "" || s.Cause != CauseConverter || s.Polls != 5 || s.Answered != 2 {
 		t.Errorf("after three failures: %+v", s)
 	}
 	if got := rec.changesOf("u1"); got != "+mains_lost@1005000 +not_responding@1010000" {
@@ -192,6 +192,9 @@ func TestAPollFeedsStateChangesAndHistory(t *testing.T) {
 	*clock = 1_080_000
 	net.setDown(u.Addr, false)
 	m.pollUnit(c, u)
+	if s = rec.stateOf("u1"); s.Cause != CauseUnknown {
+		t.Errorf("cause %q kept after a good poll", s.Cause)
+	}
 	rec.mu.Lock()
 	mins := rec.minutes["u1"]
 	rec.mu.Unlock()

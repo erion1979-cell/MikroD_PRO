@@ -12,7 +12,7 @@
 
 import type { Socket } from '../socket';
 import { el, esc } from '../dom';
-import { pill, statusOf, STATUS, type Unit } from './power-ups';
+import { statusOf, STATUS, unitPill, type Unit } from './power-ups';
 
 let units: Unit[] = [];
 let scoped = false;
@@ -29,7 +29,7 @@ export function powerCardHTML(list: readonly Unit[]): string {
     .map((u) => {
       const v = (u.state?.hasReading && u.state.values) || {};
       return `<div class="dc-pw-row${statusOf(u) === 'down' ? ' dc-pw-row-down' : ''}">
-        <span class="dc-pw-name">${esc(u.name)}</span>${pill(statusOf(u))}
+        <span class="dc-pw-name">${esc(u.name)}</span>${unitPill(u)}
         <span class="dc-pw-vals"><span title="Input voltage">In ${fmt(v.input_v)} V</span>
         <span title="Battery">Bat ${fmt(v.battery_pct)} %</span>
         <span title="Load">Load ${fmt(v.load_pct)} %</span></span></div>`;

@@ -3,7 +3,8 @@
  *
  * - One status per unit, decided in one place: no poller is "Not polled", a
  *   unit that stopped answering is "Not responding" whatever its last reading
- *   said, and otherwise the reading's mode decides.
+ *   said, and otherwise the reading's mode decides. Its label names the silent
+ *   device when the failure tells: the converter, or the inverter behind it.
  * - Durations and ages read the way the mockups show them.
  * - Each kind of event reads as a sentence with the right colour, and an open
  *   one says how long it has lasted so far.
@@ -19,7 +20,7 @@ const say = console.log.bind(console);
 const ROOT = process.env.MIKRODASH_ROOT || path.join(__dirname, '..', '..');
 const ENTRY = path.join(ROOT, 'testdata', '.power-ups-entry.ts');
 fs.writeFileSync(ENTRY, [
-  "export { statusOf, ago, duration, eventLine } from '../web/src/pages/power-ups.js';",
+  "export { statusOf, statusLabel, ago, duration, eventLine } from '../web/src/pages/power-ups.js';",
   "export { withGaps } from '../web/src/pages/power-ups-chart.js';",
   "export { powerStats } from '../web/src/pages/reports-power.js';",
 ].join('\n') + '\n');
@@ -46,6 +47,11 @@ assert.strictEqual(m.statusOf(unit(state({ mode: 'off' }))), 'off');
 // not "On mains".
 assert.strictEqual(m.statusOf(unit(state({ online: false }))), 'down', 'a silent unit kept its last mode');
 assert.strictEqual(m.statusOf(unit(state({ hasReading: false }))), 'waiting', 'a unit that never answered has a mode');
+assert.strictEqual(m.statusLabel(unit(state({ online: false, cause: 'converter' }))), 'Converter unreachable');
+assert.strictEqual(m.statusLabel(unit(state({ online: false, cause: 'unit' }))), 'Inverter not responding');
+assert.strictEqual(m.statusLabel(unit(state({ online: false, cause: '' }))), 'Not responding');
+// One failed poll is not an outage: the cause waits for the unit to be down.
+assert.strictEqual(m.statusLabel(unit(state({ cause: 'converter' }))), 'On mains', 'a cause outranked a live reading');
 assert.strictEqual(m.statusOf(unit(state({ mode: 'nonsense' }))), 'waiting', 'an unknown mode is not caught');
 
 // ── DURATIONS AND AGES ──────────────────────────────────────────────────────
@@ -73,7 +79,8 @@ assert.ok(l.title === 'Output overload protection (03)' && l.sub.includes('clear
   'a cleared overload: ' + JSON.stringify(l));
 l = m.eventLine(ev({ kind: 'event', code: 9, text: 'ECO starts', fault: false }), now);
 assert.strictEqual(l.tone, 'info', 'ECO is coloured as a fault');
-l = m.eventLine(ev({ kind: 'not_responding', initial: true }), now);
+l = m.eventLine(ev({ kind: 'not_responding', text: 'Not responding - converter not reachable', initial: true }), now);
+assert.strictEqual(l.title, 'Not responding - converter not reachable', 'the silent device is not named');
 assert.ok(l.sub.includes('already so when monitoring began') && l.tone === 'idle',
   'a condition already true at start: ' + JSON.stringify(l));
 

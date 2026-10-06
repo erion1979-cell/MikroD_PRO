@@ -78,7 +78,10 @@ type State struct {
 	Polls, Answered int64
 	// LastError is the most recent failure, sanitised for a browser.
 	LastError string
-	Open      []Change
+	// Cause is which device the most recent poll failed at (cause.go); empty
+	// after a good poll.
+	Cause Cause
+	Open  []Change
 }
 
 // Hooks receive what each poll produced. Any may be nil.
@@ -336,12 +339,14 @@ func (m *Manager) pollUnit(c Reader, u Unit) {
 	us.state.Polls++
 	if err != nil {
 		us.state.LastError = safe.Message(err.Error())
-		changes = us.tracker.Failure(ms)
+		us.state.Cause = CauseOf(err)
+		changes = us.tracker.Failure(ms, us.state.Cause)
 		done = us.bucket.Fail(ms)
 	} else {
 		reply := float64(at.Sub(began).Microseconds()) / 1000
 		r := reading
 		us.state.Answered++
+		us.state.Cause = CauseUnknown
 		us.state.Reading, us.state.LastOK, us.state.ReplyMs = &r, ms, reply
 		changes = us.tracker.Success(reading, ms)
 		done = us.bucket.Add(reading, reply, ms)

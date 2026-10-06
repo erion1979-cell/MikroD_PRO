@@ -65,6 +65,20 @@ func (e *ExceptionError) Error() string {
 		e.Code, exceptionName(e.Code), e.Function)
 }
 
+// GatewaySilent reports exceptions 0A and 0B: the converter answered, and says
+// the unit behind it did not.
+func (e *ExceptionError) GatewaySilent() bool { return e.Code == 0x0A || e.Code == 0x0B }
+
+// ConnectError is a failure to open a connection to the gateway: the converter
+// itself is off, unplugged or unreachable, whatever the units behind it do.
+type ConnectError struct {
+	Addr string
+	Err  error
+}
+
+func (e *ConnectError) Error() string { return "modbus: connect " + e.Addr + ": " + e.Err.Error() }
+func (e *ConnectError) Unwrap() error { return e.Err }
+
 // Busy reports exception 06, Server Device Busy, which a unit answers when it
 // is polled faster than it can serve.
 func (e *ExceptionError) Busy() bool { return e.Code == 0x06 }
@@ -151,7 +165,7 @@ func (c *Client) Read(unit byte, fn Function, start, count uint16) ([]uint16, er
 	if c.conn == nil {
 		conn, err := c.dial(c.addr, c.timeout)
 		if err != nil {
-			return nil, fmt.Errorf("modbus: connect %s: %w", c.addr, err)
+			return nil, &ConnectError{Addr: c.addr, Err: err}
 		}
 		c.conn = conn
 	}

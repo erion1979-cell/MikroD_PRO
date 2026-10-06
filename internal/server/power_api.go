@@ -130,12 +130,16 @@ type PowerState struct {
 	Polls      int64              `json:"polls"`
 	Answered   int64              `json:"answered"`
 	LastError  string             `json:"lastError"`
-	Open       []PowerCond        `json:"open"`
+	// Cause is which device the last poll failed at: "converter" (no
+	// connection to it), "unit" (the converter answers, the unit behind it
+	// does not), or "" (neither can be told, or the last poll answered).
+	Cause string      `json:"cause"`
+	Open  []PowerCond `json:"open"`
 }
 
 func powerStateView(st power.State) PowerState {
 	out := PowerState{UnitID: st.UnitID, Online: st.Online, LastOK: st.LastOK, ReplyMs: st.ReplyMs,
-		Polls: st.Polls, Answered: st.Answered, LastError: st.LastError,
+		Polls: st.Polls, Answered: st.Answered, LastError: st.LastError, Cause: string(st.Cause),
 		Values: map[string]float64{}, Flags: map[string]bool{}, Raw: map[string]int{}, Open: []PowerCond{}}
 	if r := st.Reading; r != nil {
 		out.HasReading = true
