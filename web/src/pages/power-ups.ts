@@ -43,7 +43,19 @@ export interface Unit {
   state: UnitState | null;
 }
 
-interface ModelInfo { id: string; producerName: string; modelName: string; kind: string }
+export interface ModelInfo { id: string; producer: string; producerName: string; modelName: string; kind: string }
+
+/** The brands the models come in, each once, by name. */
+export function brandsOf(models: readonly ModelInfo[]): { id: string; name: string }[] {
+  const out: { id: string; name: string }[] = [];
+  for (const m of models) if (!out.some((b) => b.id === m.producer)) out.push({ id: m.producer, name: m.producerName });
+  return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** One brand's models, by name. */
+export function modelsOf(models: readonly ModelInfo[], brand: string): ModelInfo[] {
+  return models.filter((m) => m.producer === brand).sort((a, b) => a.modelName.localeCompare(b.modelName));
+}
 interface PowerList {
   units: Unit[];
   models: ModelInfo[];
@@ -522,10 +534,12 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
       .map((id) => `<option value="${esc(id)}">${esc(id ? siteName(id) : 'No site')}</option>`).join('');
     siteSel.value = u?.siteId || [...choices][0] || '';
 
-    const modelSel = input<HTMLSelectElement>('pwf_model');
-    modelSel.innerHTML = data.models.map((m) =>
-      `<option value="${esc(m.id)}">${esc(m.producerName + ' - ' + m.modelName)}</option>`).join('');
-    modelSel.value = u?.model || data.models[0]?.id || '';
+    // Brand first; the Model list below it holds that brand's models.
+    const brandSel = input<HTMLSelectElement>('pwf_brand');
+    brandSel.innerHTML = brandsOf(data.models).map((b) =>
+      `<option value="${esc(b.id)}">${esc(b.name)}</option>`).join('');
+    brandSel.value = data.models.find((m) => m.id === u?.model)?.producer || brandsOf(data.models)[0]?.id || '';
+    fillModels(u?.model || '');
 
     const routerSel = input<HTMLSelectElement>('pwf_router');
     routerSel.innerHTML = '<option value="">None</option>' + routers.map((r) =>
@@ -536,6 +550,14 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
     formError('');
     el('pwFormWrap')!.classList.add('open');
     input('pwf_name').focus();
+  }
+
+  /** The Model list for the brand chosen, keeping `want` when it is one of them. */
+  function fillModels(want: string): void {
+    const list = modelsOf(data.models, input<HTMLSelectElement>('pwf_brand').value);
+    const modelSel = input<HTMLSelectElement>('pwf_model');
+    modelSel.innerHTML = list.map((m) => `<option value="${esc(m.id)}">${esc(m.modelName)}</option>`).join('');
+    modelSel.value = list.some((m) => m.id === want) ? want : list[0]?.id || '';
   }
 
   function formError(msg: string): void {
@@ -583,6 +605,7 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
   el('pwAdd')?.addEventListener('click', () => void openForm(null));
   el('pwEdit')?.addEventListener('click', () => void openForm(data.units.find((u) => u.id === openId) || null));
   el('pwf_save')?.addEventListener('click', () => void save());
+  el('pwf_brand')?.addEventListener('change', () => fillModels(''));
   el('pwf_delete')?.addEventListener('click', () => void remove());
   el('pwf_infoBtn')?.addEventListener('click', () => {
     const info = el('pwf_info');

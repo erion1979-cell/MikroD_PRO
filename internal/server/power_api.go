@@ -174,7 +174,10 @@ type powerUnitView struct {
 }
 
 type powerModelView struct {
-	ID           string `json:"id"`
+	ID string `json:"id"`
+	// Producer is the brand's id (the defs/<producer>/ folder), which the
+	// form's Brand list groups the models by.
+	Producer     string `json:"producer"`
 	ProducerName string `json:"producerName"`
 	ModelName    string `json:"modelName"`
 	Kind         string `json:"kind"`
@@ -245,7 +248,7 @@ func (s *Server) powerList(w http.ResponseWriter, r *http.Request) {
 	models := []powerModelView{}
 	all, _ := model.All()
 	for _, m := range all {
-		models = append(models, powerModelView{ID: m.ID(), ProducerName: m.ProducerName,
+		models = append(models, powerModelView{ID: m.ID(), Producer: m.Producer, ProducerName: m.ProducerName,
 			ModelName: m.ModelName, Kind: m.Kind})
 	}
 

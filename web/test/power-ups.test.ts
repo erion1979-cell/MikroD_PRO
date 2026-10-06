@@ -8,6 +8,8 @@
  * - Durations and ages read the way the mockups show them.
  * - Each kind of event reads as a sentence with the right colour, and an open
  *   one says how long it has lasted so far.
+ * - The form's Brand list holds each brand once, and its Model list only that
+ *   brand's models.
  * - The Reports tab's summary: a window with no polls says "-", not 0%.
  */
 
@@ -20,7 +22,7 @@ const say = console.log.bind(console);
 const ROOT = process.env.MIKRODASH_ROOT || path.join(__dirname, '..', '..');
 const ENTRY = path.join(ROOT, 'testdata', '.power-ups-entry.ts');
 fs.writeFileSync(ENTRY, [
-  "export { statusOf, statusLabel, ago, duration, eventLine } from '../web/src/pages/power-ups.js';",
+  "export { statusOf, statusLabel, ago, duration, eventLine, brandsOf, modelsOf } from '../web/src/pages/power-ups.js';",
   "export { withGaps } from '../web/src/pages/power-ups-chart.js';",
   "export { powerStats } from '../web/src/pages/reports-power.js';",
 ].join('\n') + '\n');
@@ -53,6 +55,18 @@ assert.strictEqual(m.statusLabel(unit(state({ online: false, cause: '' }))), 'No
 // One failed poll is not an outage: the cause waits for the unit to be down.
 assert.strictEqual(m.statusLabel(unit(state({ cause: 'converter' }))), 'On mains', 'a cause outranked a live reading');
 assert.strictEqual(m.statusOf(unit(state({ mode: 'nonsense' }))), 'waiting', 'an unknown mode is not caught');
+
+// ── BRAND, THEN MODEL ───────────────────────────────────────────────────────
+const models = [
+  { id: 'powerguard/v2', producer: 'powerguard', producerName: 'PowerGuard', modelName: 'Online UPS', kind: 'ups' },
+  { id: 'acme/x', producer: 'acme', producerName: 'Acme', modelName: 'X', kind: 'inverter' },
+  { id: 'powerguard/modbus-v1.1', producer: 'powerguard', producerName: 'PowerGuard', modelName: 'Line-interactive', kind: 'inverter' },
+];
+assert.deepStrictEqual(m.brandsOf(models), [{ id: 'acme', name: 'Acme' }, { id: 'powerguard', name: 'PowerGuard' }],
+  'each brand once, by name');
+assert.deepStrictEqual(m.modelsOf(models, 'powerguard').map((x: { id: string }) => x.id),
+  ['powerguard/modbus-v1.1', 'powerguard/v2'], "a brand's models, by name");
+assert.deepStrictEqual(m.modelsOf(models, 'nobody'), [], 'an unknown brand has models');
 
 // ── DURATIONS AND AGES ──────────────────────────────────────────────────────
 assert.strictEqual(m.duration(48_000), '48 s');

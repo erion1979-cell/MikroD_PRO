@@ -125,13 +125,19 @@
           </div>
           <div class="sform-row" style="margin-top:.6rem">
             <div>
-              <label class="sform-label" for="pwf_model">Model</label>
-              <select class="sform-input" id="pwf_model"></select>
+              <label class="sform-label" for="pwf_brand">Brand</label>
+              <select class="sform-input" id="pwf_brand"></select>
             </div>
             <div>
               <label class="sform-label" for="pwf_battery">Battery capacity, Ah <span class="pw-optional">(optional)</span></label>
               <input class="sform-input" id="pwf_battery" type="number" min="1" step="any" placeholder="for runtime estimates">
             </div>
+          </div>
+          <!-- The brand's models (pages/power-ups.ts): one file each under
+               internal/power/model/defs/<brand>/. -->
+          <div style="margin-top:.6rem">
+            <label class="sform-label" for="pwf_model">Model</label>
+            <select class="sform-input" id="pwf_model"></select>
           </div>
           <div style="margin-top:.6rem">
             <label class="sform-label" for="pwf_router">Site router <span class="pw-optional">(optional, shown on the unit's page)</span></label>
