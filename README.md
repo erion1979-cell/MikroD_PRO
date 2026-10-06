@@ -2,10 +2,10 @@
   <img src="web/public/logo.png" alt="MikroDash logo" width="96" height="96">
 </p>
 
-<h1 align="center">MikroDash</h1>
+<h1 align="center">MikroDash PRO</h1>
 
 <p align="center">
-  <strong>Open-source command center for RouterOS</strong><br>
+  <strong>Open-source command center for RouterOS and Power Devices on Racks</strong><br>
   Self-hosted and live over the MikroTik RouterOS v7 binary API: a single static binary, one Docker volume.
 </p>
 
