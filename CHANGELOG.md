@@ -2,6 +2,36 @@
 
 All notable changes to MikroDash will be documented in this file.
 
+## [0.8.71-pro.2] - Several dashboards, and which device went silent
+
+Built on MikroDash 0.8.71, like 0.8.71-pro.1.
+
+### New
+
+- **Named dashboards.** Add, rename, duplicate and delete dashboards; they sit as tabs above the
+  grid and are saved to your account. The first one is the dashboard you already had, unchanged.
+- **Cards for any device.** On a named dashboard, the System, Traffic, Bandwidth, Ping, WAN Flow
+  and Physical Ports cards can be added any number of times, each following the selected device
+  or one of its own, chosen in the card's header. Each copy sees only what its user could see by
+  selecting that device.
+- **A device count.** A pill beside the tabs says how many devices the dashboard on screen reads,
+  and names them on hover. A dashboard's cards may name at most 8 devices, since each one keeps
+  its router's collectors running while the dashboard is open.
+- **Converter or inverter.** A Power/UPS unit that stops answering now says why: **Converter
+  unreachable** (no connection to the Ethernet-to-RS485 converter) or **Inverter not responding**
+  (the converter answers, the unit behind it does not). Events and notifications carry the same
+  words.
+- **Brand, then Model.** The Add unit form asks for the brand, then lists that brand's models. A
+  model is one JSON file under `internal/power/model/defs/<brand>/`; `docs/power-models.md`
+  explains how to add one.
+
+### Changed
+
+- **A unit that is not responding is impossible to miss.** "Last reading … ago" flashes, every
+  "Not responding" is red with a pulsing border, the status bits read as unknown instead of their
+  last state, and the last values are greyed and labelled "last known". Motion stops for
+  reduced-motion users.
+
 ## [0.8.71-pro.1] - Power/UPS monitoring, and this fork's own home
 
 The first release of this fork, built on MikroDash 0.8.71. Everything in 0.8.71 is here; this
