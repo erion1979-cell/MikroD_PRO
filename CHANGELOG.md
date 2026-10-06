@@ -2,6 +2,29 @@
 
 All notable changes to MikroDash will be documented in this file.
 
+## [0.8.71-pro.3] - The power flow moves, and the first PowerGuard product
+
+Built on MikroDash 0.8.71, like 0.8.71-pro.2.
+
+### New
+
+- **The power flow is animated.** On a unit's page, glowing particles run along the lines in the
+  direction power goes: mains input to the unit and the unit to the output on mains, and to the
+  battery while it charges; battery to the unit and on to the output on battery. A busier output
+  moves faster, a unit that is not answering shows no movement, and reduced-motion users get the
+  still lines.
+- **PowerGuard HP-10212** (1 kW, 12 V DC, 220 V AC 50 Hz, off-grid low-frequency pure sine wave,
+  15 A charger) in the Model list. A **?** beside Model in the unit form shows the chosen model's
+  technical details.
+
+### Changed
+
+- **Products share their brand's register map.** A product is a short file naming its model,
+  its details and the map it reads with, so a fix to the map reaches every product;
+  `docs/power-models.md` explains how to add one. The PowerGuard map is listed as
+  **Other model (Modbus protocol V1.1)** for units whose product is not listed yet; existing
+  units keep it, unchanged.
+
 ## [0.8.71-pro.2] - Several dashboards, and which device went silent
 
 Built on MikroDash 0.8.71, like 0.8.71-pro.1.
