@@ -31,7 +31,7 @@ yet converted, which can appear once per dashboard and follow the selected devic
 
 ## Phases
 
-1. **Named dashboards.** The dashboards are stored per user in a new `user_layouts` row,
+1. **Named dashboards.** **Done.** The dashboards are stored per user in a new `user_layouts` row,
    `dashboards`, validated by the server. The first is built from the existing layout, so nothing
    changes for anyone until they add a second. The tab strip sits beside the title; switching
    applies that dashboard's layout to the grid, and the existing editor edits the active one.

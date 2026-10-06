@@ -32,7 +32,9 @@ import { el } from '../dom';
 import { createGridEditor, type GridEditor } from './dashboard-grid-edit';
 import { createGridDrag } from './dashboard-grid-drag';
 import { createGridResize } from './dashboard-grid-resize';
-import { applyLayout, loadLayout, mergeLayoutFromServer, syncDashRooms } from './dashboard-grid-store';
+import { applyLayout, loadLayout, mergeLayoutFromServer, saveLayout, syncDashRooms } from './dashboard-grid-store';
+import { initDashboardTabs } from './dashboard-tabs';
+import { CARD_ROOMS, type GridCard } from '../gen/grid-tables';
 
 export function initDashboardGrid(): GridEditor | null {
   const gridRoot = el('dash-grid-root');
@@ -40,7 +42,9 @@ export function initDashboardGrid(): GridEditor | null {
   // than throwing: the same guard the live `init` uses.
   if (!gridRoot) return null;
 
-  const editor = createGridEditor(loadLayout());
+  // Save goes to whichever dashboard is on screen; the tabs move it.
+  let saver: (l: GridCard[]) => void = saveLayout;
+  const editor = createGridEditor(loadLayout(), CARD_ROOMS, (l) => saver(l));
   const drag = createGridDrag(editor);
   const resize = createGridResize(editor);
 
@@ -130,8 +134,12 @@ export function initDashboardGrid(): GridEditor | null {
   // The server's copy, which is what carries a layout between browsers. It
   // arrives AFTER the local one has already painted, so a slow request costs
   // nothing and a failed one leaves the local layout alone.
+  const tabs = initDashboardTabs(editor, (fn) => { saver = fn; });
+
   void mergeLayoutFromServer().then((merged) => {
-    if (!merged) return;
+    // The first dashboard's server copy is cached either way, and drawn only
+    // when that dashboard is the one showing.
+    if (!merged || !tabs.mainShowing() || editor.isEditing()) return;
     editor.setLayout(merged);
     applyLayout(merged);
   });

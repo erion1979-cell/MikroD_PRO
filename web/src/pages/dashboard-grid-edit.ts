@@ -67,6 +67,9 @@ export function createGridEditor(
   // shipped table share a room, so the self-exclusion in `addCard` - which is
   // load-bearing - cannot be distinguished from its absence on any real input.
   rooms: Readonly<Record<string, string>> = CARD_ROOMS,
+  // Where Save writes: the first dashboard's own store unless the caller,
+  // which knows which named dashboard is on screen, says otherwise.
+  save: (l: GridCard[]) => void = saveLayout,
 ): GridEditor {
   let layout = initial;
   let editSnapshot: GridCard[] = [];
@@ -105,7 +108,7 @@ export function createGridEditor(
   function exitEditMode(doSave: boolean): void {
     editing = false;
     if (doSave) {
-      saveLayout(layout);
+      save(layout);
     } else {
       layout = editSnapshot;
       applyLayout(layout);

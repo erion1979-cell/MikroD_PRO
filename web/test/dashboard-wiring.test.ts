@@ -150,6 +150,10 @@ const HELPERS = new Set([
   // layout, not a card. When it lands it belongs in neither list without a
   // note explaining which.
   'dashboard-grid-layout',
+  // The named-dashboard tab strip (docs/dashboards/PLAN.md). It swaps the
+  // grid's layout and moves the room subscriptions; it listens to no socket
+  // event and draws no card, so it is the page's chrome, not a card.
+  'dashboard-tabs',
   // Persistence, DOM application and room bookkeeping for the grid. Same
   // caveat as the layout arithmetic: a helper until the module that WIRES the
   // grid lands.

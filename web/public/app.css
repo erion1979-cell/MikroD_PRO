@@ -3845,3 +3845,12 @@
     .dc-pw-row:last-child{border-bottom:0}
     .dc-pw-name{font-weight:600;min-width:5rem}
     .dc-pw-vals{margin-left:auto;display:flex;gap:.7rem;font-family:var(--font-mono);font-size:.75rem;color:var(--text-muted)}
+
+/* ── Named dashboards: the tab strip above the grid (pages/dashboard-tabs.ts) ── */
+.dash-tabs{display:flex;align-items:center;gap:.35rem;margin:0 20px .25rem;border-bottom:1px solid var(--border);min-width:0}
+.dash-tabs .stab-bar{border-bottom:none;margin-bottom:0;flex:0 1 auto;min-width:0}
+.dash-tabs .stab{padding:.35rem .8rem;font-size:.75rem}
+.dash-tab-act{background:transparent;border:1px solid transparent;color:var(--text-muted);font-size:.72rem;padding:.2rem .5rem;border-radius:6px;cursor:pointer;white-space:nowrap}
+.dash-tab-act:hover:not(:disabled){color:var(--accent-rx);border-color:var(--border)}
+.dash-tab-act:disabled{opacity:.35;cursor:default}
+.dash-tab-sep{flex:1}

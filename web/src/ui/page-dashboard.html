@@ -8,6 +8,16 @@
       <span id="ztpNoticeText"></span>
       <button class="sbtn sbtn-primary ztp-btn" type="button" id="ztpNoticeBtn">Review on Devices</button>
     </div>
+    <!-- Named dashboards (docs/dashboards/PLAN.md, pages/dashboard-tabs.ts).
+         The first tab is the dashboard everyone already had. -->
+    <div class="dash-tabs">
+      <div class="stab-bar" id="dashTabBar" role="tablist"></div>
+      <button class="dash-tab-act" type="button" id="dashTabNew" title="New dashboard">+ New</button>
+      <span class="dash-tab-sep"></span>
+      <button class="dash-tab-act" type="button" id="dashTabRename" title="Rename this dashboard">Rename</button>
+      <button class="dash-tab-act" type="button" id="dashTabCopy" title="Copy this dashboard">Duplicate</button>
+      <button class="dash-tab-act" type="button" id="dashTabDelete" title="Delete this dashboard">Delete</button>
+    </div>
     <div id="dash-grid-root">
       <!-- Drag placeholder (position updated by JS during drag) -->
       <div id="dash-placeholder" aria-hidden="true"></div>
