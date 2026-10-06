@@ -141,8 +141,12 @@
           <!-- The brand's models (pages/power-ups.ts): one file each under
                internal/power/model/defs/<brand>/. -->
           <div style="margin-top:.6rem">
-            <label class="sform-label" for="pwf_model">Model</label>
+            <div class="pw-model-head">
+              <label class="sform-label" for="pwf_model" style="margin:0">Model</label>
+              <button type="button" class="pw-info-btn" id="pwf_modelInfoBtn" aria-expanded="false" aria-controls="pwf_modelInfo" title="Technical details of this model">?</button>
+            </div>
             <select class="sform-input" id="pwf_model"></select>
+            <ul class="pw-info pw-model-info" id="pwf_modelInfo" hidden></ul>
           </div>
           <div style="margin-top:.6rem">
             <label class="sform-label" for="pwf_router">Site router <span class="pw-optional">(optional, shown on the unit's page)</span></label>

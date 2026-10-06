@@ -7,14 +7,48 @@ Modbus registers to read and what each one means, and the Add unit form builds i
 ```
 internal/power/model/defs/
   powerguard/                 <- one folder per brand
-    modbus-v1.1.json          <- one file per model
+    modbus-v1.1.json          <- the brand's register map (also "Other model")
+    hp-10212.json             <- a product: its name, its details, and "uses" the map
   <your-brand>/
     <your-model>.json
 ```
 
-## The steps
+## A new product of a brand already here
 
-1. **Copy an existing file.** Start from `internal/power/model/defs/powerguard/modbus-v1.1.json`. It
+Most of the time this is all there is. A manufacturer's protocol covers its whole range, so the
+register map is written once and each product is a short file that points at it. Copy
+`defs/powerguard/hp-10212.json` and change the model and its details (the values below are an example, not a real product):
+
+```json
+{
+  "producer": "powerguard",
+  "producerName": "PowerGuard",
+  "model": "hp-20224",
+  "modelName": "HP-20224",
+  "kind": "inverter",
+  "uses": "modbus-v1.1",
+  "details": [
+    "Rated power: 2 kW",
+    "Battery: 24 V DC"
+  ]
+}
+```
+
+- **File name:** `model`, plus `.json`, in the brand's folder: `defs/powerguard/hp-20224.json`.
+  Lower-case letters, digits and dashes.
+- **`modelName`** is what the **Model** list shows.
+- **`uses`** is the register map it reads with: the map's `model`, in the same brand folder. A
+  product file holds no registers of its own, and one that does is refused.
+- **`details`** are the lines the **?** beside Model shows in the form, up to 20 of up to 120
+  characters each. Optional.
+
+The map itself stays in the Model list as "Other model (Modbus protocol V1.1)", for a unit whose
+product is not listed yet. Only write a new map, as below, for a product that does **not** speak
+its brand's existing protocol.
+
+## A new brand, or a new register map
+
+1. **Copy the existing map.** Start from `internal/power/model/defs/powerguard/modbus-v1.1.json`. It
    is a complete, working example.
 2. **Put the copy where it belongs.** The folder is the brand's id and the file name is the model's
    id. Use lower-case letters, digits and dashes, for example `defs/acme/ups-3k.json`.
@@ -29,6 +63,7 @@ internal/power/model/defs/
    | `modelName` | the model as people write it | the **Model** list |
    | `kind` | `"inverter"` or `"ups"` | - |
    | `serial` | the RS485 settings, e.g. `"9600 8N1"` | the unit's page |
+   | `details` | optional technical details, one line each | the form's **?** |
 
    A new model of an existing brand goes in that brand's folder with the **same** `producer` and
    `producerName`, and it appears under that brand in the form.

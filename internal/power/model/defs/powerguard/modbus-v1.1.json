@@ -2,7 +2,7 @@
   "producer": "powerguard",
   "producerName": "PowerGuard",
   "model": "modbus-v1.1",
-  "modelName": "Line-interactive inverter (Modbus protocol V1.1)",
+  "modelName": "Other model (Modbus protocol V1.1)",
   "kind": "inverter",
   "serial": "9600 8N1",
   "reads": [

@@ -1,0 +1,15 @@
+{
+  "producer": "powerguard",
+  "producerName": "PowerGuard",
+  "model": "hp-10212",
+  "modelName": "HP-10212",
+  "kind": "inverter",
+  "uses": "modbus-v1.1",
+  "details": [
+    "Rated power: 1 kW",
+    "Battery: 12 V DC",
+    "Output: 220 V AC, 50 Hz",
+    "Off-grid, low-frequency pure sine wave inverter",
+    "Built-in AC charger: 15 A"
+  ]
+}

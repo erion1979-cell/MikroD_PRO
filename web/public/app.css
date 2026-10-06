@@ -3838,6 +3838,8 @@
     .pw-info-btn{background:none;border:1px solid var(--border);border-radius:50%;width:1.5rem;height:1.5rem;line-height:1;
       color:var(--accent-rx);cursor:pointer;font-size:.95rem;padding:0}
     .pw-info-btn[aria-expanded="true"]{background:color-mix(in srgb,var(--accent-rx) 15%,transparent)}
+    .pw-model-head{display:flex;align-items:center;gap:.45rem;margin-bottom:.3rem}
+    .pw-info.pw-model-info{margin:.45rem 0 0;padding-left:1.8rem}
     .pw-info{font-size:.78rem;line-height:1.45;padding:.6rem .8rem;margin-bottom:.6rem;border-radius:8px;
       border:1px solid color-mix(in srgb,var(--accent-rx) 30%,var(--border));background:color-mix(in srgb,var(--accent-rx) 6%,transparent)}
     .pw-info p{margin:0 0 .4rem} .pw-info ul{margin:0;padding-left:1.1rem} .pw-info li{margin-bottom:.25rem}

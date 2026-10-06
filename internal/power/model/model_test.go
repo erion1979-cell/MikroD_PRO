@@ -270,3 +270,73 @@ func TestAFileMustLiveWhereItsIDSays(t *testing.T) {
 		t.Errorf("a correctly placed definition: %v %v", all, err)
 	}
 }
+
+// A PRODUCT READS WITH THE MAP IT USES: the same registers, so the verified
+// readings decode the same through HP-10212 as through the map, under its own
+// name and with its details.
+func TestAProductReadsWithItsMap(t *testing.T) {
+	hp := ByID("powerguard/hp-10212")
+	if hp == nil {
+		_, err := All()
+		t.Fatalf("HP-10212 did not load: %v", err)
+	}
+	if hp.ModelName != "HP-10212" || len(hp.Details) == 0 || hp.Serial != "9600 8N1" {
+		t.Errorf("name, details or serial lost: %+v", hp)
+	}
+	for _, regs := range [][]uint16{vecOnBattery, vecOnMains} {
+		a, b := decode(t, hp, regs), decode(t, powerguard(t), regs)
+		if a.Mode != b.Mode || a.Values["battery_v"] != b.Values["battery_v"] || a.EventText != b.EventText {
+			t.Errorf("HP-10212 reads %+v, the map %+v", a, b)
+		}
+	}
+}
+
+func TestAProductMustUseARealMapAndNoRegistersOfItsOwn(t *testing.T) {
+	product := func(over map[string]any) []byte {
+		d := map[string]any{"producer": "powerguard", "producerName": "PowerGuard", "model": "p1",
+			"modelName": "P1", "kind": "inverter", "uses": "modbus-v1.1"}
+		for k, v := range over {
+			d[k] = v
+		}
+		b, _ := json.Marshal(d)
+		return b
+	}
+	mapFile := mutate(t, func(map[string]any) {})
+	cases := map[string]fstest.MapFS{
+		"a map that is not there": {"defs/powerguard/p1.json": {Data: product(map[string]any{"uses": "nope"})}},
+		"a map of another brand": {
+			"defs/powerguard/p1.json":     {Data: product(nil)},
+			"defs/other/modbus-v1.1.json": {Data: mutate(t, func(d map[string]any) { d["producer"] = "other" })},
+		},
+		"a map that uses another": {
+			"defs/powerguard/modbus-v1.1.json": {Data: mapFile},
+			"defs/powerguard/p1.json":          {Data: product(nil)},
+			"defs/powerguard/p2.json":          {Data: product(map[string]any{"model": "p2", "uses": "p1"})},
+		},
+		"registers of its own": {
+			"defs/powerguard/modbus-v1.1.json": {Data: mapFile},
+			"defs/powerguard/p1.json": {Data: product(map[string]any{
+				"reads": []any{map[string]any{"function": 4, "start": 0, "count": 1}}})},
+		},
+		"an empty detail": {
+			"defs/powerguard/modbus-v1.1.json": {Data: mapFile},
+			"defs/powerguard/p1.json":          {Data: product(map[string]any{"details": []any{""}})},
+		},
+		"a detail too long": {
+			"defs/powerguard/modbus-v1.1.json": {Data: mapFile},
+			"defs/powerguard/p1.json":          {Data: product(map[string]any{"details": []any{strings.Repeat("x", 121)}})},
+		},
+	}
+	for name, fsys := range cases {
+		if _, err := load(fsys, "defs"); err == nil {
+			t.Errorf("%s was accepted", name)
+		}
+	}
+	ok := fstest.MapFS{
+		"defs/powerguard/modbus-v1.1.json": {Data: mapFile},
+		"defs/powerguard/p1.json":          {Data: product(map[string]any{"details": []any{"1 kW"}})},
+	}
+	if all, err := load(ok, "defs"); err != nil || len(all) != 2 || len(all[1].Reads) == 0 {
+		t.Errorf("a product using its map: %v %v", all, err)
+	}
+}

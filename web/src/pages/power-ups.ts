@@ -44,7 +44,9 @@ export interface Unit {
   state: UnitState | null;
 }
 
-export interface ModelInfo { id: string; producer: string; producerName: string; modelName: string; kind: string }
+export interface ModelInfo {
+  id: string; producer: string; producerName: string; modelName: string; kind: string; details: string[];
+}
 
 /** The brands the models come in, each once, by name. */
 export function brandsOf(models: readonly ModelInfo[]): { id: string; name: string }[] {
@@ -563,6 +565,17 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
     const modelSel = input<HTMLSelectElement>('pwf_model');
     modelSel.innerHTML = list.map((m) => `<option value="${esc(m.id)}">${esc(m.modelName)}</option>`).join('');
     modelSel.value = list.some((m) => m.id === want) ? want : list[0]?.id || '';
+    drawModelInfo();
+  }
+
+  /** The "?" beside Model: the chosen model's technical details, closed on each change. */
+  function drawModelInfo(): void {
+    const details = data.models.find((m) => m.id === input<HTMLSelectElement>('pwf_model').value)?.details || [];
+    const btn = el('pwf_modelInfoBtn')!, box = el('pwf_modelInfo')!;
+    btn.hidden = !details.length;
+    btn.setAttribute('aria-expanded', 'false');
+    box.hidden = true;
+    box.innerHTML = details.map((d) => '<li>' + esc(d) + '</li>').join('');
   }
 
   function formError(msg: string): void {
@@ -611,6 +624,12 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
   el('pwEdit')?.addEventListener('click', () => void openForm(data.units.find((u) => u.id === openId) || null));
   el('pwf_save')?.addEventListener('click', () => void save());
   el('pwf_brand')?.addEventListener('change', () => fillModels(''));
+  el('pwf_model')?.addEventListener('change', drawModelInfo);
+  el('pwf_modelInfoBtn')?.addEventListener('click', () => {
+    const box = el('pwf_modelInfo')!;
+    box.hidden = !box.hidden;
+    el('pwf_modelInfoBtn')!.setAttribute('aria-expanded', box.hidden ? 'false' : 'true');
+  });
   el('pwf_delete')?.addEventListener('click', () => void remove());
   el('pwf_infoBtn')?.addEventListener('click', () => {
     const info = el('pwf_info');

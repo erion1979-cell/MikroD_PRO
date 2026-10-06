@@ -9,6 +9,15 @@
 // the page, the alerts, the history - reads only those names, so supporting a
 // new model is adding a file, never new polling code.
 //
+// ── A PRODUCT NAMES THE MAP IT READS WITH ───────────────────────────────────
+//
+// One manufacturer's protocol usually covers its whole range. So a register map
+// is written once, and each product of that brand is a short file that names
+// its model, lists its technical details and says `"uses": "<map>"`, the map's
+// own model id in the same brand folder. It holds no registers itself; `load`
+// copies them from the map, so a fix to the map reaches every product. A map is
+// still a model of its own, selectable for a unit whose product is not listed.
+//
 // ── EVERY DEFINITION IS CHECKED, AND A BAD ONE IS REFUSED ──────────────────
 //
 // `parse` refuses an unknown JSON key (a typo would otherwise silently drop a
@@ -31,6 +40,9 @@ import (
 
 	"mikrodash/internal/power/modbus"
 )
+
+// A product's details: how many lines, and how long each may be.
+const maxDetails, maxDetail = 20, 120
 
 // Measure is one named quantity a model may report.
 type Measure struct {
@@ -118,19 +130,25 @@ type EventReg struct {
 
 // Model is one validated definition.
 type Model struct {
-	Producer     string   `json:"producer"`
-	ProducerName string   `json:"producerName"`
-	Model        string   `json:"model"`
-	ModelName    string   `json:"modelName"`
-	Kind         string   `json:"kind"`
-	Serial       string   `json:"serial"`
-	Reads        []Read   `json:"reads"`
-	Fields       []Field  `json:"fields"`
-	Flags        FlagReg  `json:"flags"`
-	Raw          []RawReg `json:"raw"`
-	Event        EventReg `json:"event"`
-	codes        map[int]string
-	notFault     map[int]bool
+	Producer     string `json:"producer"`
+	ProducerName string `json:"producerName"`
+	Model        string `json:"model"`
+	ModelName    string `json:"modelName"`
+	Kind         string `json:"kind"`
+	// Uses names the map this product reads with: a model id in the same
+	// brand. A product that uses a map carries no registers of its own.
+	Uses string `json:"uses,omitempty"`
+	// Details are the product's technical details, one line each, shown on
+	// request in the unit form.
+	Details  []string `json:"details,omitempty"`
+	Serial   string   `json:"serial"`
+	Reads    []Read   `json:"reads"`
+	Fields   []Field  `json:"fields"`
+	Flags    FlagReg  `json:"flags"`
+	Raw      []RawReg `json:"raw"`
+	Event    EventReg `json:"event"`
+	codes    map[int]string
+	notFault map[int]bool
 }
 
 // ID is the model's stored identity: producer/model.
@@ -236,6 +254,23 @@ func parse(name string, b []byte) (*Model, error) {
 	}
 	if m.Kind != "inverter" && m.Kind != "ups" {
 		return fail("kind %q: want inverter or ups", m.Kind)
+	}
+	if len(m.Details) > maxDetails {
+		return fail("at most %d details", maxDetails)
+	}
+	for _, d := range m.Details {
+		if d == "" || len([]rune(d)) > maxDetail {
+			return fail("a detail is empty or longer than %d characters", maxDetail)
+		}
+	}
+	if m.Uses != "" {
+		// Its registers are the map's, filled in by load; any of its own would
+		// be silently ignored, so they are refused.
+		if len(m.Reads) > 0 || len(m.Fields) > 0 || m.Flags.Reg != 0 || m.Flags.Bits != nil ||
+			len(m.Raw) > 0 || m.Event.Reg != 0 || m.Event.Codes != nil || m.Event.NotFault != nil {
+			return fail("uses %q, so it must not describe registers of its own", m.Uses)
+		}
+		return &m, nil
 	}
 	if len(m.Reads) == 0 {
 		return fail("no reads")
@@ -378,8 +413,36 @@ func load(fsys fs.FS, root string) ([]*Model, error) {
 		out = append(out, m)
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID() < out[j].ID() })
-	return out, err
+	return out, resolveUses(out)
+}
+
+// resolveUses gives each product the registers of the map it uses. A map is a
+// model with registers of its own: one that itself uses another is refused,
+// so there is never a chain to follow.
+func resolveUses(all []*Model) error {
+	byID := map[string]*Model{}
+	for _, m := range all {
+		byID[m.ID()] = m
+	}
+	for _, m := range all {
+		if m.Uses == "" {
+			continue
+		}
+		base := byID[m.Producer+"/"+m.Uses]
+		if base == nil || base.Uses != "" {
+			return fmt.Errorf("%s: uses %q, which is not a register map of %s", m.ID(), m.Uses, m.Producer)
+		}
+		m.Reads, m.Fields, m.Flags, m.Raw, m.Event = base.Reads, base.Fields, base.Flags, base.Raw, base.Event
+		m.codes, m.notFault = base.codes, base.notFault
+		if m.Serial == "" {
+			m.Serial = base.Serial
+		}
+	}
+	return nil
 }
 
 //go:embed defs

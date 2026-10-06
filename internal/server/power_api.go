@@ -181,6 +181,8 @@ type powerModelView struct {
 	ProducerName string `json:"producerName"`
 	ModelName    string `json:"modelName"`
 	Kind         string `json:"kind"`
+	// Details are the product's technical details, for the form's "?".
+	Details []string `json:"details"`
 }
 
 // powerStates is the pollers' current state per unit id; empty when they are
@@ -249,7 +251,7 @@ func (s *Server) powerList(w http.ResponseWriter, r *http.Request) {
 	all, _ := model.All()
 	for _, m := range all {
 		models = append(models, powerModelView{ID: m.ID(), Producer: m.Producer, ProducerName: m.ProducerName,
-			ModelName: m.ModelName, Kind: m.Kind})
+			ModelName: m.ModelName, Kind: m.Kind, Details: append([]string{}, m.Details...)})
 	}
 
 	// WHERE THE CALLER MAY ADD OR MOVE A UNIT: the sites they hold write on,
