@@ -3808,18 +3808,26 @@
     .pw-tone-bg-ok{background:var(--accent-ok)} .pw-tone-bg-bad{background:var(--accent-err)}
     .pw-kv{display:grid;grid-template-columns:1fr 1fr;gap:.35rem .8rem;font-size:.82rem;margin-top:.45rem}
     .pw-kv>div{display:flex;flex-direction:column} .pw-kv>div>span:last-child{font-family:var(--font-mono)}
-    .pw-flow{display:grid;grid-template-columns:1fr 3rem 1fr 3rem 1fr;align-items:center;row-gap:1.4rem;padding:.6rem 0}
+    .pw-flow{display:grid;grid-template-columns:1fr 6rem 1fr 6rem 1fr;align-items:center;row-gap:2.6rem;padding:.6rem 0}
     .pw-node{border:1px solid var(--border);border-radius:10px;padding:.55rem .7rem;text-align:center;min-width:0}
     .pw-node-mid{border-color:color-mix(in srgb,var(--accent-rx) 40%,var(--border))}
     .pw-node-label{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)}
     .pw-node-v{font-size:1.15rem;font-weight:600;font-family:var(--font-mono)} .pw-node-sub{font-size:.75rem;color:var(--text-muted);font-family:var(--font-mono)}
     .pw-arrow{height:2px;background:var(--border);position:relative}
     .pw-arrow::after{content:'';position:absolute;right:-1px;top:-4px;border:5px solid transparent;border-left-color:var(--border);border-right:0}
-    .pw-arrow.is-on{background:var(--accent-ok)} .pw-arrow.is-on::after{border-left-color:var(--accent-ok)}
+    /* A live line is a faint track: the particles over it are what say power flows. */
+    .pw-arrow.is-on{background:color-mix(in srgb,var(--accent-ok) 45%,transparent)} .pw-arrow.is-on::after{border-left-color:color-mix(in srgb,var(--accent-ok) 60%,transparent)}
     .pw-arrow.is-bad{background:var(--accent-err)} .pw-arrow.is-bad::after{border-left-color:var(--accent-err)}
     .pw-battery-link{grid-column:3;position:relative}
-    .pw-battery-link::before{content:'';position:absolute;left:50%;top:-1.4rem;height:1.4rem;width:2px;background:var(--border)}
-    .pw-battery-link.is-on::before{background:var(--accent-warn)}
+    .pw-battery-link::before{content:'';position:absolute;left:50%;top:-2.6rem;height:2.6rem;width:2px;background:var(--border)}
+    .pw-battery-link.is-on::before{background:color-mix(in srgb,var(--accent-warn) 55%,transparent)}
+    .pw-battery-link.is-charge::before{background:color-mix(in srgb,#a78bfa 45%,transparent)}
+    /* The particles over the flow (pages/power-flow-anim.ts): mains blue, output
+       green, charging violet, from the battery amber, as on the Network Flow card. */
+    .pw-flow-wrap{position:relative}
+    .pw-flow-anim{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+    .pwa-lane{fill:currentColor;filter:drop-shadow(0 0 3px currentColor)}
+    .pwa-mains{color:#38bdf8} .pwa-output{color:#34d399} .pwa-charge{color:#a78bfa} .pwa-discharge{color:#fbbf24}
     .pw-events{display:flex;flex-direction:column;gap:.55rem;max-height:22rem;overflow-y:auto}
     .pw-ev{display:flex;gap:.55rem;align-items:flex-start;font-size:.85rem} .pw-ev .pw-dot{margin-top:.35rem}
     .pw-ev-sub{font-size:.75rem;color:var(--text-muted)}
@@ -3884,12 +3892,13 @@
    (the battery link below still shows), smaller figures, and a value that never
    breaks inside a number ("230.0 V" used to wrap across three lines). */
 @media (max-width:620px){
-  .pw-flow{grid-template-columns:repeat(3,minmax(0,1fr));column-gap:.4rem}
+  .pw-flow{grid-template-columns:repeat(3,minmax(0,1fr));column-gap:.8rem}
   .pw-flow .pw-arrow{display:none}
   .pw-battery-link{grid-column:1 / -1;justify-self:center;min-width:50%}
   .pw-node{padding:.45rem .25rem}
   .pw-node-label{font-size:.6rem}
   .pw-node-v{font-size:.82rem;white-space:nowrap}
   .pw-node-mid .pw-node-v{white-space:normal;font-size:.78rem}
-  .pw-node-sub{font-size:.62rem}
+  .pw-node-sub{font-size:.62rem;white-space:nowrap}
+  .pw-node-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 }

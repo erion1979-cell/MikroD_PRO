@@ -10,6 +10,9 @@
  *   one says how long it has lasted so far.
  * - The form's Brand list holds each brand once, and its Model list only that
  *   brand's models.
+ * - The power flow moves the way the status bits say: input to unit to output
+ *   (and to the battery while charging) on mains, battery to unit to output on
+ *   battery, and nothing at all from a unit that is not answering.
  * - The Reports tab's summary: a window with no polls says "-", not 0%.
  */
 
@@ -24,6 +27,7 @@ const ENTRY = path.join(ROOT, 'testdata', '.power-ups-entry.ts');
 fs.writeFileSync(ENTRY, [
   "export { statusOf, statusLabel, ago, duration, eventLine, brandsOf, modelsOf } from '../web/src/pages/power-ups.js';",
   "export { withGaps } from '../web/src/pages/power-ups-chart.js';",
+  "export { flowLanes } from '../web/src/pages/power-flow-anim.js';",
   "export { powerStats } from '../web/src/pages/reports-power.js';",
 ].join('\n') + '\n');
 const OUT = path.join(ROOT, 'testdata', '.power-ups.cjs');
@@ -67,6 +71,22 @@ assert.deepStrictEqual(m.brandsOf(models), [{ id: 'acme', name: 'Acme' }, { id: 
 assert.deepStrictEqual(m.modelsOf(models, 'powerguard').map((x: { id: string }) => x.id),
   ['powerguard/modbus-v1.1', 'powerguard/v2'], "a brand's models, by name");
 assert.deepStrictEqual(m.modelsOf(models, 'nobody'), [], 'an unknown brand has models');
+
+// ── WHICH WAY THE POWER FLOWS ───────────────────────────────────────────────
+const lanes = (flags: Record<string, boolean>, down = false, values: Record<string, number> = { load_pct: 42 }) =>
+  m.flowLanes({ down, flags, values }).map((l: { from: string; to: string; key: string }) => l.key + ':' + l.from + '>' + l.to).join(' ');
+assert.strictEqual(lanes({ mains_ok: true, charger_on: true, inverter_on: false, output_on: true }),
+  'mains:input>unit charge:unit>battery output:unit>output', 'on mains, charging');
+assert.strictEqual(lanes({ mains_ok: true, charger_on: false, inverter_on: false, output_on: true }),
+  'mains:input>unit output:unit>output', 'a charger that is off still fills the battery');
+assert.strictEqual(lanes({ mains_ok: false, charger_on: false, inverter_on: true, output_on: true }),
+  'discharge:battery>unit output:unit>output', 'on battery');
+assert.strictEqual(lanes({ mains_ok: true, charger_on: true, inverter_on: false, output_on: false }),
+  'mains:input>unit charge:unit>battery', 'an output switched off still flows');
+assert.strictEqual(lanes({ mains_ok: true, charger_on: true, inverter_on: true, output_on: true }, true), '',
+  'a unit that is not answering shows movement');
+assert.strictEqual(m.flowLanes({ down: false, flags: { mains_ok: true, output_on: true }, values: { load_pct: 250 } })[0].load, 1,
+  'a load past 100 % is not capped');
 
 // ── DURATIONS AND AGES ──────────────────────────────────────────────────────
 assert.strictEqual(m.duration(48_000), '48 s');

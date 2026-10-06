@@ -21,6 +21,7 @@ import { fmtTs } from '../timefmt';
 import type { Socket } from '../socket';
 import type { PowerCond, PowerState } from '../gen/payloads';
 import { drawPowerCharts, stopPowerCharts, type HistPoint } from './power-ups-chart';
+import { createPowerFlowAnim, flowLanes } from './power-flow-anim';
 
 type Cond = PowerCond;
 type UnitState = PowerState;
@@ -187,6 +188,7 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
   let routers: { id: string; label: string }[] = [];
   let filter: Status | 'all' | 'down' = 'all';
   let openId = '';
+  const flowAnim = createPowerFlowAnim('pwFlow', 'pwFlowAnim');
   let range = '24h';
   let historyAt = 0;
   const sort: SortState = { col: 'site', dir: 'asc' };
@@ -456,12 +458,15 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
       ? (st?.hasReading && st.lastOk ? 'Last known values, read ' + ago(st.lastOk) : 'No reading yet')
       : st?.apparentVa != null ? 'Apparent power (calculated V × A): ' + Math.round(st.apparentVa).toLocaleString() + ' VA' : '';
     el('pwFlow')!.innerHTML = `
-      <div class="pw-node"><div class="pw-node-label">Mains input</div><div class="pw-node-v">${fmt(v.input_v)} V</div><div class="pw-node-sub">${fmt(v.input_hz)} Hz</div></div>
+      <div class="pw-node" data-pwn="input"><div class="pw-node-label">Mains input</div><div class="pw-node-v">${fmt(v.input_v)} V</div><div class="pw-node-sub">${fmt(v.input_hz)} Hz</div></div>
       <div class="pw-arrow ${mainsOn ? 'is-on' : ''}"></div>
-      <div class="pw-node pw-node-mid${down ? ' pw-node-down' : ''}"><div class="pw-node-label">${u.producerName ? esc(u.producerName) : 'Unit'}</div><div class="pw-node-v pw-tone-${s === 'mains' ? 'ok' : s === 'battery' ? 'warn' : 'bad'}">${esc(statusLabel(u))}</div><div class="pw-node-sub">DC bus ${fmt(v.dc_bus_a)} A</div></div>
+      <div class="pw-node pw-node-mid${down ? ' pw-node-down' : ''}" data-pwn="unit"><div class="pw-node-label">${u.producerName ? esc(u.producerName) : 'Unit'}</div><div class="pw-node-v pw-tone-${s === 'mains' ? 'ok' : s === 'battery' ? 'warn' : 'bad'}">${esc(statusLabel(u))}</div><div class="pw-node-sub">DC bus ${fmt(v.dc_bus_a)} A</div></div>
       <div class="pw-arrow ${f.output_on && !down ? 'is-on' : ''} ${s === 'fault' ? 'is-bad' : ''}"></div>
-      <div class="pw-node"><div class="pw-node-label">Output / load</div><div class="pw-node-v">${fmt(v.output_v)} V</div><div class="pw-node-sub">${fmt(v.output_a)} A · ${fmt(v.load_pct, 0)} %</div></div>
-      <div class="pw-battery-link ${fromBattery ? 'is-on' : ''}"><div class="pw-node"><div class="pw-node-label">Battery</div><div class="pw-node-v">${fmt(v.battery_v)} V · ${fmt(v.battery_pct, 0)} %</div></div></div>`;
+      <div class="pw-node" data-pwn="output"><div class="pw-node-label">Output / load</div><div class="pw-node-v">${fmt(v.output_v)} V</div><div class="pw-node-sub">${fmt(v.output_a)} A · ${fmt(v.load_pct, 0)} %</div></div>
+      <div class="pw-battery-link ${fromBattery ? 'is-on' : mainsOn && f.charger_on ? 'is-charge' : ''}"><div class="pw-node" data-pwn="battery"><div class="pw-node-label">Battery</div><div class="pw-node-v">${fmt(v.battery_v)} V · ${fmt(v.battery_pct, 0)} %</div></div></div>`;
+
+    // The particles along those lines, from the same status bits.
+    flowAnim.set(flowLanes({ down, flags: f, values: v }));
 
     // Battery: % is voltage-based and reads high while charging, so the
     // voltage stands beside it.

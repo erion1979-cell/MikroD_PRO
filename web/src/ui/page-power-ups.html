@@ -62,7 +62,12 @@
             <div class="pw-grid">
               <div class="pw-card pw-wide">
                 <div class="pw-card-title">Power flow <span class="pw-calc" id="pwApparent"></span></div>
-                <div class="pw-flow" id="pwFlow"></div>
+                <!-- The boxes, and over them the particles running between
+                     them (pages/power-flow-anim.ts). -->
+                <div class="pw-flow-wrap">
+                  <div class="pw-flow" id="pwFlow"></div>
+                  <svg class="pw-flow-anim" id="pwFlowAnim" aria-hidden="true"></svg>
+                </div>
               </div>
               <div class="pw-card">
                 <div class="pw-card-title">Battery</div>
