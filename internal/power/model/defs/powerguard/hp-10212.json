@@ -5,6 +5,7 @@
   "modelName": "HP-10212",
   "kind": "inverter",
   "uses": "modbus-v1.1",
+  "default": true,
   "details": [
     "Rated power: 1 kW",
     "Battery: 12 V DC",

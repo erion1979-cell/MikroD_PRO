@@ -27,6 +27,7 @@
 // DASH_DEVICES_MAX of them (the selection, which is read anyway, aside).
 
 import { el, esc } from '../dom';
+import { askConfirm, askText, tell } from '../dialog';
 import { DEFAULT_LAYOUT, type GridCard } from '../gen/grid-tables';
 import { mergeLayout, repairOverlaps } from './dashboard-grid-layout';
 import { applyLayout, loadLayout, saveLayout, syncDashRooms } from './dashboard-grid-store';
@@ -212,37 +213,51 @@ export function initDashboardTabs(
     const b = (e.target as HTMLElement | null)?.closest?.('[data-dash]') as HTMLElement | null;
     if (b?.dataset.dash && b.dataset.dash !== active) show(b.dataset.dash);
   });
-  el('dashTabNew')?.addEventListener('click', () => {
+  // The app's own dialogs (dialog.ts), not the browser's. Each asks, then acts
+  // on what it captured before asking: the dashboard can change while the
+  // dialog is open (a tab click behind it is not possible, a socket update is).
+  const full = (): boolean => data.list.length + 1 >= 20;
+  const atMost = (): Promise<void> =>
+    tell({ title: 'Dashboards', message: 'There can be at most 20 dashboards. Delete one to make room.' });
+  const nameOf = (): string => (active === MAIN ? data.mainName : data.list.find((d) => d.id === active)?.name || '');
+  el('dashTabNew')?.addEventListener('click', async () => {
     if (editor.isEditing()) return;
-    if (data.list.length + 1 >= 20) { window.alert('There can be at most 20 dashboards.'); return; }
-    const name = cleanName(window.prompt('Name of the new dashboard:', ''));
+    if (full()) { await atMost(); return; }
+    const name = cleanName(await askText({ title: 'New dashboard', label: 'Name', okLabel: 'Create', maxLength: 40 }));
     // A new dashboard starts empty: Edit, then Add card.
     if (name) add(name, []);
   });
-  el('dashTabRename')?.addEventListener('click', () => {
+  el('dashTabRename')?.addEventListener('click', async () => {
     if (editor.isEditing()) return;
-    const cur = active === MAIN ? data.mainName : data.list.find((d) => d.id === active)?.name || '';
-    const name = cleanName(window.prompt('Rename this dashboard:', cur));
+    const was = active;
+    const name = cleanName(await askText({ title: 'Rename dashboard', label: 'Name', value: nameOf(), okLabel: 'Rename', maxLength: 40 }));
     if (!name) return;
-    if (active === MAIN) data.mainName = name;
-    else { const d = data.list.find((x) => x.id === active); if (d) d.name = name; }
+    if (was === MAIN) data.mainName = name;
+    else { const d = data.list.find((x) => x.id === was); if (d) d.name = name; }
     persist();
     draw();
   });
-  el('dashTabCopy')?.addEventListener('click', () => {
+  el('dashTabCopy')?.addEventListener('click', async () => {
     if (editor.isEditing()) return;
-    if (data.list.length + 1 >= 20) { window.alert('There can be at most 20 dashboards.'); return; }
-    const cur = active === MAIN ? data.mainName : data.list.find((d) => d.id === active)?.name || '';
-    const name = cleanName(window.prompt('Name of the copy:', (cur + ' (copy)').slice(0, 40)));
-    if (name) add(name, fromGrid(editor.getLayout(), devices.spec));
+    if (full()) { await atMost(); return; }
+    const cards = fromGrid(editor.getLayout(), devices.spec);
+    const name = cleanName(await askText({
+      title: 'Duplicate dashboard', label: 'Name of the copy', value: (nameOf() + ' (copy)').slice(0, 40),
+      okLabel: 'Duplicate', maxLength: 40,
+    }));
+    if (name) add(name, cards);
   });
-  el('dashTabDelete')?.addEventListener('click', () => {
+  el('dashTabDelete')?.addEventListener('click', async () => {
     if (editor.isEditing()) return;
     const d = data.list.find((x) => x.id === active);
-    if (!d || !window.confirm('Delete the dashboard "' + d.name + '"? Its layout cannot be recovered.')) return;
+    if (!d || !(await askConfirm({
+      title: 'Delete dashboard', message: 'Delete the dashboard "' + d.name + '"? Its layout cannot be recovered.',
+      okLabel: 'Delete', danger: true,
+    }))) return;
     data.list = data.list.filter((x) => x !== d);
     persist();
-    show(MAIN);
+    if (active === d.id) show(MAIN);
+    else draw();
   });
 
   // Adding a device card type on a named dashboard makes a copy, however many

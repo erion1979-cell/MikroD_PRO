@@ -1181,6 +1181,12 @@
     /* ── Router modal & management ─────────────────────────────── */
     .rtr-modal-bg{position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center}
     .rtr-modal-bg.open{display:flex}
+    /* MikroDash's own prompt / confirm (dialog.ts): above any page dialog. */
+    .app-dialog-bg{z-index:1100}
+    .rtr-modal.app-dialog{width:min(420px,92vw)}
+    .app-dialog .rtr-modal-body{display:block;padding:1rem 1.1rem}
+    .app-dialog .sform-label{display:block;margin-bottom:.35rem}
+    .app-dialog-msg{margin:0;font-size:.85rem;line-height:1.5;color:var(--text-main)}
     .rtr-modal{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;width:min(960px,94vw);max-height:90vh;overflow-y:auto;box-shadow:0 16px 40px rgba(0,0,0,.5)}
     .rtr-modal-hdr{padding:.9rem 1.1rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
     .rtr-modal-title{font-size:.82rem;font-weight:700;color:var(--text-main);text-transform:uppercase;letter-spacing:.06em}
@@ -3812,12 +3818,14 @@
     .pw-node{border:1px solid var(--border);border-radius:10px;padding:.55rem .7rem;text-align:center;min-width:0}
     .pw-node-mid{border-color:color-mix(in srgb,var(--accent-rx) 40%,var(--border))}
     .pw-node-label{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)}
+    /* The unit box's "Model - Brand": one line, the brand dropped on a phone. */
+    .pw-node-mid .pw-node-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .pw-node-v{font-size:1.15rem;font-weight:600;font-family:var(--font-mono)} .pw-node-sub{font-size:.75rem;color:var(--text-muted);font-family:var(--font-mono)}
     .pw-arrow{height:2px;background:var(--border);position:relative}
-    .pw-arrow::after{content:'';position:absolute;right:-1px;top:-4px;border:5px solid transparent;border-left-color:var(--border);border-right:0}
-    /* A live line is a faint track: the particles over it are what say power flows. */
-    .pw-arrow.is-on{background:color-mix(in srgb,var(--accent-ok) 45%,transparent)} .pw-arrow.is-on::after{border-left-color:color-mix(in srgb,var(--accent-ok) 60%,transparent)}
-    .pw-arrow.is-bad{background:var(--accent-err)} .pw-arrow.is-bad::after{border-left-color:var(--accent-err)}
+    /* Plain lines, no arrowheads: a live one is a faint track, and the particles
+       over it say which way the power flows. */
+    .pw-arrow.is-on{background:color-mix(in srgb,var(--accent-ok) 45%,transparent)}
+    .pw-arrow.is-bad{background:var(--accent-err)}
     .pw-battery-link{grid-column:3;position:relative}
     .pw-battery-link::before{content:'';position:absolute;left:50%;top:-2.6rem;height:2.6rem;width:2px;background:var(--border)}
     .pw-battery-link.is-on::before{background:color-mix(in srgb,var(--accent-warn) 55%,transparent)}
@@ -3840,6 +3848,7 @@
     .pw-info-btn[aria-expanded="true"]{background:color-mix(in srgb,var(--accent-rx) 15%,transparent)}
     .pw-model-head{display:flex;align-items:center;gap:.45rem;margin-bottom:.3rem}
     .pw-info.pw-model-info{margin:.45rem 0 0;padding-left:1.8rem}
+    .pw-info.pw-model-info.is-empty{list-style:none;padding-left:.8rem;color:var(--text-muted)}
     .pw-info{font-size:.78rem;line-height:1.45;padding:.6rem .8rem;margin-bottom:.6rem;border-radius:8px;
       border:1px solid color-mix(in srgb,var(--accent-rx) 30%,var(--border));background:color-mix(in srgb,var(--accent-rx) 6%,transparent)}
     .pw-info p{margin:0 0 .4rem} .pw-info ul{margin:0;padding-left:1.1rem} .pw-info li{margin-bottom:.25rem}
@@ -3896,11 +3905,12 @@
 @media (max-width:620px){
   .pw-flow{grid-template-columns:repeat(3,minmax(0,1fr));column-gap:.8rem}
   .pw-flow .pw-arrow{display:none}
+  .pw-bname{display:none}
   .pw-battery-link{grid-column:1 / -1;justify-self:center;min-width:50%}
   .pw-node{padding:.45rem .25rem}
   .pw-node-label{font-size:.6rem}
   .pw-node-v{font-size:.82rem;white-space:nowrap}
-  .pw-node-mid .pw-node-v{white-space:normal;font-size:.78rem}
+  .pw-node-mid .pw-node-v{white-space:normal;font-size:.7rem;word-break:normal;overflow-wrap:normal}
   .pw-node-sub{font-size:.62rem;white-space:nowrap}
   .pw-node-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 }

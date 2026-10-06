@@ -40,7 +40,10 @@ register map is written once and each product is a short file that points at it.
 - **`uses`** is the register map it reads with: the map's `model`, in the same brand folder. A
   product file holds no registers of its own, and one that does is refused.
 - **`details`** are the lines the **?** beside Model shows in the form, up to 20 of up to 120
-  characters each. Optional.
+  characters each. Optional. A model without them shows "No detailed technical info on file for this
+  model."
+- **`"default": true`** makes it the model a new unit starts on in the form. Only one model may
+  say so; it is HP-10212 today, so move the line rather than add a second.
 
 The map itself stays in the Model list as "Other model (Modbus protocol V1.1)", for a unit whose
 product is not listed yet. Only write a new map, as below, for a product that does **not** speak

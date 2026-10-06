@@ -46,6 +46,8 @@ export interface Unit {
 
 export interface ModelInfo {
   id: string; producer: string; producerName: string; modelName: string; kind: string; details: string[];
+  /** The model a new unit starts on. */
+  default: boolean;
 }
 
 /** The brands the models come in, each once, by name. */
@@ -104,6 +106,14 @@ export function statusLabel(u: Unit): string {
   if (s === 'down' && u.state?.cause === 'unit') return 'Inverter not responding';
   return STATUS[s].label;
 }
+
+/** "Model - Brand" for the unit's box; the brand is its own span, which a phone hides. */
+export function unitLabel(u: Pick<Unit, 'modelName' | 'producerName'>): string {
+  if (!u.modelName) return u.producerName ? esc(u.producerName) : 'Unit';
+  return '<span class="pw-mname">' + esc(u.modelName) + '</span>' +
+    (u.producerName ? '<span class="pw-bname"> - ' + esc(u.producerName) + '</span>' : '');
+}
+const unitTitle = (u: Unit): string => [u.modelName, u.producerName].filter(Boolean).join(' - ');
 
 export function unitPill(u: Unit): string {
   return pill(statusOf(u), statusLabel(u));
@@ -462,7 +472,7 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
     el('pwFlow')!.innerHTML = `
       <div class="pw-node" data-pwn="input"><div class="pw-node-label">Mains input</div><div class="pw-node-v">${fmt(v.input_v)} V</div><div class="pw-node-sub">${fmt(v.input_hz)} Hz</div></div>
       <div class="pw-arrow ${mainsOn ? 'is-on' : ''}"></div>
-      <div class="pw-node pw-node-mid${down ? ' pw-node-down' : ''}" data-pwn="unit"><div class="pw-node-label">${u.producerName ? esc(u.producerName) : 'Unit'}</div><div class="pw-node-v pw-tone-${s === 'mains' ? 'ok' : s === 'battery' ? 'warn' : 'bad'}">${esc(statusLabel(u))}</div><div class="pw-node-sub">DC bus ${fmt(v.dc_bus_a)} A</div></div>
+      <div class="pw-node pw-node-mid${down ? ' pw-node-down' : ''}" data-pwn="unit"><div class="pw-node-label" title="${esc(unitTitle(u))}">${unitLabel(u)}</div><div class="pw-node-v pw-tone-${s === 'mains' ? 'ok' : s === 'battery' ? 'warn' : 'bad'}">${esc(statusLabel(u))}</div><div class="pw-node-sub">DC bus ${fmt(v.dc_bus_a)} A</div></div>
       <div class="pw-arrow ${f.output_on && !down ? 'is-on' : ''} ${s === 'fault' ? 'is-bad' : ''}"></div>
       <div class="pw-node" data-pwn="output"><div class="pw-node-label">Output / load</div><div class="pw-node-v">${fmt(v.output_v)} V</div><div class="pw-node-sub">${fmt(v.output_a)} A · ${fmt(v.load_pct, 0)} %</div></div>
       <div class="pw-battery-link ${fromBattery ? 'is-on' : mainsOn && f.charger_on ? 'is-charge' : ''}"><div class="pw-node" data-pwn="battery"><div class="pw-node-label">Battery</div><div class="pw-node-v">${fmt(v.battery_v)} V · ${fmt(v.battery_pct, 0)} %</div></div></div>`;
@@ -545,8 +555,11 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
     const brandSel = input<HTMLSelectElement>('pwf_brand');
     brandSel.innerHTML = brandsOf(data.models).map((b) =>
       `<option value="${esc(b.id)}">${esc(b.name)}</option>`).join('');
-    brandSel.value = data.models.find((m) => m.id === u?.model)?.producer || brandsOf(data.models)[0]?.id || '';
-    fillModels(u?.model || '');
+    // A new unit starts on the catalogue's default model (its file says
+    // "default": true), an existing one on its own.
+    const want = u?.model || data.models.find((m) => m.default)?.id || '';
+    brandSel.value = data.models.find((m) => m.id === want)?.producer || brandsOf(data.models)[0]?.id || '';
+    fillModels(want);
 
     const routerSel = input<HTMLSelectElement>('pwf_router');
     routerSel.innerHTML = '<option value="">None</option>' + routers.map((r) =>
@@ -572,10 +585,12 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
   function drawModelInfo(): void {
     const details = data.models.find((m) => m.id === input<HTMLSelectElement>('pwf_model').value)?.details || [];
     const btn = el('pwf_modelInfoBtn')!, box = el('pwf_modelInfo')!;
-    btn.hidden = !details.length;
     btn.setAttribute('aria-expanded', 'false');
     box.hidden = true;
-    box.innerHTML = details.map((d) => '<li>' + esc(d) + '</li>').join('');
+    box.classList.toggle('is-empty', !details.length);
+    box.innerHTML = details.length
+      ? details.map((d) => '<li>' + esc(d) + '</li>').join('')
+      : '<li>No detailed technical info on file for this model.</li>';
   }
 
   function formError(msg: string): void {

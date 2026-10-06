@@ -25,7 +25,7 @@ const say = console.log.bind(console);
 const ROOT = process.env.MIKRODASH_ROOT || path.join(__dirname, '..', '..');
 const ENTRY = path.join(ROOT, 'testdata', '.power-ups-entry.ts');
 fs.writeFileSync(ENTRY, [
-  "export { statusOf, statusLabel, ago, duration, eventLine, brandsOf, modelsOf } from '../web/src/pages/power-ups.js';",
+  "export { statusOf, statusLabel, ago, duration, eventLine, brandsOf, modelsOf, unitLabel } from '../web/src/pages/power-ups.js';",
   "export { withGaps } from '../web/src/pages/power-ups-chart.js';",
   "export { flowLanes } from '../web/src/pages/power-flow-anim.js';",
   "export { powerStats } from '../web/src/pages/reports-power.js';",
@@ -71,6 +71,10 @@ assert.deepStrictEqual(m.brandsOf(models), [{ id: 'acme', name: 'Acme' }, { id: 
 assert.deepStrictEqual(m.modelsOf(models, 'powerguard').map((x: { id: string }) => x.id),
   ['powerguard/modbus-v1.1', 'powerguard/v2'], "a brand's models, by name");
 assert.deepStrictEqual(m.modelsOf(models, 'nobody'), [], 'an unknown brand has models');
+// The unit's box reads "Model - Brand", the brand in its own span for a phone to drop.
+assert.strictEqual(m.unitLabel({ modelName: 'HP-10212', producerName: 'PowerGuard' }),
+  '<span class="pw-mname">HP-10212</span><span class="pw-bname"> - PowerGuard</span>');
+assert.strictEqual(m.unitLabel({ modelName: '', producerName: '' }), 'Unit', 'a unit with no model has no label');
 
 // ── WHICH WAY THE POWER FLOWS ───────────────────────────────────────────────
 const lanes = (flags: Record<string, boolean>, down = false, values: Record<string, number> = { load_pct: 42 }) =>

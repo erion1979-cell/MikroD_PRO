@@ -280,7 +280,7 @@ func TestAProductReadsWithItsMap(t *testing.T) {
 		_, err := All()
 		t.Fatalf("HP-10212 did not load: %v", err)
 	}
-	if hp.ModelName != "HP-10212" || len(hp.Details) == 0 || hp.Serial != "9600 8N1" {
+	if hp.ModelName != "HP-10212" || len(hp.Details) == 0 || hp.Serial != "9600 8N1" || !hp.Default {
 		t.Errorf("name, details or serial lost: %+v", hp)
 	}
 	for _, regs := range [][]uint16{vecOnBattery, vecOnMains} {
@@ -326,6 +326,11 @@ func TestAProductMustUseARealMapAndNoRegistersOfItsOwn(t *testing.T) {
 			"defs/powerguard/modbus-v1.1.json": {Data: mapFile},
 			"defs/powerguard/p1.json":          {Data: product(map[string]any{"details": []any{strings.Repeat("x", 121)}})},
 		},
+	}
+	cases["two defaults"] = fstest.MapFS{
+		"defs/powerguard/modbus-v1.1.json": {Data: mapFile},
+		"defs/powerguard/p1.json":          {Data: product(map[string]any{"default": true})},
+		"defs/powerguard/p2.json":          {Data: product(map[string]any{"model": "p2", "default": true})},
 	}
 	for name, fsys := range cases {
 		if _, err := load(fsys, "defs"); err == nil {

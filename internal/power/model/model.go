@@ -140,7 +140,10 @@ type Model struct {
 	Uses string `json:"uses,omitempty"`
 	// Details are the product's technical details, one line each, shown on
 	// request in the unit form.
-	Details  []string `json:"details,omitempty"`
+	Details []string `json:"details,omitempty"`
+	// Default marks the model a new unit starts on in the form. At most one
+	// model in the catalogue may say so.
+	Default  bool     `json:"default,omitempty"`
 	Serial   string   `json:"serial"`
 	Reads    []Read   `json:"reads"`
 	Fields   []Field  `json:"fields"`
@@ -417,6 +420,15 @@ func load(fsys fs.FS, root string) ([]*Model, error) {
 		return nil, err
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID() < out[j].ID() })
+	var def string
+	for _, m := range out {
+		if m.Default {
+			if def != "" {
+				return nil, fmt.Errorf("%s and %s both say default; at most one model may", def, m.ID())
+			}
+			def = m.ID()
+		}
+	}
 	return out, resolveUses(out)
 }
 
