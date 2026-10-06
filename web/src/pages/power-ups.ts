@@ -560,6 +560,7 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
     // "default": true), an existing one on its own.
     const want = u?.model || data.models.find((m) => m.default)?.id || '';
     brandSel.value = data.models.find((m) => m.id === want)?.producer || brandsOf(data.models)[0]?.id || '';
+    showModelInfo(false);
     fillModels(want);
 
     const routerSel = input<HTMLSelectElement>('pwf_router');
@@ -582,16 +583,24 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
     drawModelInfo();
   }
 
-  /** The "?" beside Model: the chosen model's technical details, closed on each change. */
+  /**
+   * The "?" beside Model: the chosen model's technical details. Open or closed
+   * is the "?"'s own state, changed only by a click on it (showModelInfo): a new
+   * brand or model refills the details in place, so somebody comparing models
+   * sees each one's as they pick it. The form opens with them closed.
+   */
   function drawModelInfo(): void {
     const details = data.models.find((m) => m.id === input<HTMLSelectElement>('pwf_model').value)?.details || [];
-    const btn = el('pwf_modelInfoBtn')!, box = el('pwf_modelInfo')!;
-    btn.setAttribute('aria-expanded', 'false');
-    box.hidden = true;
+    const box = el('pwf_modelInfo')!;
     box.classList.toggle('is-empty', !details.length);
     box.innerHTML = details.length
       ? details.map((d) => '<li>' + esc(d) + '</li>').join('')
       : '<li>No detailed technical info on file for this model.</li>';
+  }
+
+  function showModelInfo(open: boolean): void {
+    el('pwf_modelInfo')!.hidden = !open;
+    el('pwf_modelInfoBtn')!.setAttribute('aria-expanded', open ? 'true' : 'false');
   }
 
   function formError(msg: string): void {
@@ -642,11 +651,7 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
   el('pwf_save')?.addEventListener('click', () => void save());
   el('pwf_brand')?.addEventListener('change', () => fillModels(''));
   el('pwf_model')?.addEventListener('change', drawModelInfo);
-  el('pwf_modelInfoBtn')?.addEventListener('click', () => {
-    const box = el('pwf_modelInfo')!;
-    box.hidden = !box.hidden;
-    el('pwf_modelInfoBtn')!.setAttribute('aria-expanded', box.hidden ? 'false' : 'true');
-  });
+  el('pwf_modelInfoBtn')?.addEventListener('click', () => showModelInfo(el('pwf_modelInfo')!.hidden === true));
   el('pwf_delete')?.addEventListener('click', () => void remove());
   el('pwf_infoBtn')?.addEventListener('click', () => {
     const info = el('pwf_info');
