@@ -33,6 +33,7 @@
 import { fmtTime } from '../timefmt';
 import type { Socket } from '../socket';
 import { el, fmtMbps } from '../dom';
+import { pageScope, type CardScope } from './dashboard-card-scope';
 import { notePayload } from '../stale';
 import { isRosDisconnected } from '../banners';
 import {
@@ -57,20 +58,6 @@ interface ChartLike {
 // than an import - the same arrangement `pages/routing.ts` uses.
 declare const Chart: undefined | (new (canvas: HTMLElement, cfg: unknown) => ChartLike);
 
-let chart: ChartLike | null = null;
-let allPoints: TrafficPoint[] = [];
-let currentIf = '';
-let windowSecs = 60;
-let lastSampleTs = 0, serverOffset = 0;
-let yMaxTarget = 0, yMaxCurrent = 0, lastTickMs = 0;
-// The right buffer AS DRAWN, eased toward `rightBufferFor`'s step function so
-// the axis edge can neither reverse nor stall. See `easeBuffer`. It sits beside
-// `yMaxCurrent` because it is the same idea on the other axis, and it follows
-// the same split: eased on the keepalive, SNAPPED on a redraw.
-let rbCurrent = RIGHT_BUFFER_MS;
-let keepaliveId: number | null = null;
-let pendingTraffic: TrafficSample | null = null;
-let trafficRafId: number | null = null;
 
 /**
  * Evenly spaced grid lines and timestamp labels at fixed pixel positions.
@@ -119,7 +106,7 @@ export const trafficTickPlugin = {
   },
 };
 
-export function chartConfig(nowMs: number): unknown {
+export function chartConfig(nowMs: number, windowSecs = 60): unknown {
   return {
     type: 'line',
     plugins: [trafficTickPlugin],
@@ -189,158 +176,6 @@ export function chartConfig(nowMs: number): unknown {
   };
 }
 
-function makeChartObj(): void {
-  if (chart) { chart.destroy(); chart = null; }
-  const canvas = el('trafficChart');
-  if (!canvas || typeof Chart === 'undefined') return;
-  chart = new Chart(canvas, chartConfig(Date.now()));
-}
-
-// ── THE SHARED BUFFER, READ BY THE BANDWIDTH PAGE ───────────────────────────
-//
-// The live app gets this for free: `app.js:6950` builds the Bandwidth chart's
-// points from `allPoints`, the same module-scope array the dashboard chart uses,
-// because both live in one file scope. ONE buffer, two readers.
-//
-// This port has them in separate modules, so the sharing has to be deliberate -
-// and it must be an ACCESSOR, not the array. `allPoints` is REASSIGNED
-// (`initChart` replaces it from history, `reset` empties it), so a consumer that
-// captured the array once would keep reading a detached copy and quietly diverge
-// the moment either happened. Returning it per call cannot.
-//
-// The alternative - a second buffer fed from the same `traffic:update` - is the
-// thing the port record warns against: two arrays pruned by two rules drift apart,
-// and the drift only shows up as two charts disagreeing about the same second.
-export function sharedPoints(): TrafficPoint[] { return allPoints; }
-
-/** The shared clock the keepalives anchor to: `Date.now() + serverOffset`, and
- *  zero for `lastSampleTs` until the first sample has arrived. Both are updated
- *  by the dashboard's own handler for EVERY sample regardless of which page is
- *  open, which is what keeps a returning page's clock warm. */
-export function sharedClock(): { lastSampleTs: number; serverOffset: number; windowSecs: number } {
-  return { lastSampleTs, serverOffset, windowSecs };
-}
-
-export function redrawChart(): void {
-  // MEASURED FROM THE SAMPLES, not assumed to be a second: a router in stream
-  // mode does not deliver on a metronome, and a fixed gap leaves the line short
-  // of the right edge whenever one arrives late. See rightBufferFor.
-  const rb = rightBufferFor(allPoints);
-  const pts = windowedPoints(allPoints, Date.now(), windowSecs, rb);
-  if (!chart) makeChartObj();
-  if (!chart) return;
-  chart.data.datasets[0]!.data = pts.map((p) => ({ x: p.ts, y: p.rx_mbps }));
-  chart.data.datasets[1]!.data = pts.map((p) => ({ x: p.ts, y: p.tx_mbps }));
-  let dMax = 0;
-  for (const p of pts) {
-    if (p.rx_mbps > dMax) dMax = p.rx_mbps;
-    if (p.tx_mbps > dMax) dMax = p.tx_mbps;
-  }
-  yMaxTarget = dMax || 1;
-  // Set, NOT eased: a redraw is a discontinuity already, and easing the axis
-  // from the old scale would animate a change the data did not make.
-  yMaxCurrent = yMaxTarget;
-  chart.options.scales.y.max = yMaxCurrent;
-  // SNAPPED, like `yMaxCurrent` two lines up and for the same reason: a redraw
-  // is a discontinuity already - a new interface, a new router, a new window -
-  // so easing the edge across it would animate a change the data did not make.
-  rbCurrent = rb;
-  const anchor = anchorMs(lastSampleTs, serverOffset, Date.now(), pts);
-  const win = axisWindow(anchor, windowSecs, rb);
-  chart.options.scales.x.min = win.min;
-  chart.options.scales.x.max = win.max;
-  chart.update('none');
-}
-
-export function applyWindow(secs: number): void {
-  windowSecs = secs;
-  redrawChart();
-}
-
-export function initChart(points: TrafficPoint[] | undefined): void {
-  allPoints = (points || []).slice(-MAX_CLIENT_POINTS);
-  if (!chart) makeChartObj();
-  redrawChart();
-}
-
-/**
- * Bring a returning tab's chart up to now, from the handler that reports it visible.
- *
- * Nothing is hidden on the way out: the keepalive already stops while the tab is
- * hidden, and samples keep landing in `allPoints`. So on return the newest
- * sample is applied at once rather than on the next frame, and the chart is
- * rebuilt from the buffer at the current time. This runs before the browser
- * paints the returning page, so the first frame is already current: no blank,
- * no fade and no catch-up scroll.
- *
- * Skipped under the same conditions the keepalive stops for, so the chart of a
- * router that is down, or of a socket that is disconnected, is not scrolled away
- * from its last data.
- */
-export function resumeTrafficChart(): void {
-  if (!chart || document.hidden || isRosDisconnected() ||
-      document.body.classList.contains('is-disconnected')) return;
-  if (trafficRafId) { cancelAnimationFrame(trafficRafId); trafficRafId = null; }
-  flushTraffic();
-  redrawChart();
-}
-
-function keepaliveTick(): void {
-  keepaliveId = requestAnimationFrame(keepaliveTick);
-  if (!chart || document.hidden || !lastSampleTs || isRosDisconnected() ||
-      document.body.classList.contains('is-disconnected')) return;
-  const now = Date.now();
-  if (now - lastTickMs < 33) return;
-  const prevTickMs = lastTickMs;
-  lastTickMs = now;
-  const sn = now + serverOffset;
-  // EASED, NOT TAKEN. `lastTickMs` was read above, so `elapsed` is the real gap
-  // between frames and the bound is against wall time rather than frame count -
-  // a slow frame may move the buffer further, and a fast one less.
-  const elapsed = now - prevTickMs;
-  rbCurrent = easeBuffer(rbCurrent, rightBufferFor(allPoints), elapsed);
-  const rb = rbCurrent;
-  const vl = sn - windowSecs * 1000 - rb;
-  const rd = chart.data.datasets[0]!.data, td = chart.data.datasets[1]!.data;
-  yMaxTarget = pruneAndMax(rd, td, vl) || 1;
-  yMaxCurrent = smoothMax(yMaxCurrent, yMaxTarget);
-  chart.options.scales.y.max = yMaxCurrent;
-  chart.options.scales.x.min = vl;
-  chart.options.scales.x.max = sn - rb;
-  chart.update('none');
-}
-
-function flushTraffic(): void {
-  trafficRafId = null;
-  if (!pendingTraffic) return;
-  const p = pendingTraffic;
-  pendingTraffic = null;
-  if (!document.hidden) {
-    const rx = el('liveRx'), tx = el('liveTx');
-    if (rx) rx.textContent = fmtMbps(p.rx_mbps);
-    if (tx) tx.textContent = fmtMbps(p.tx_mbps);
-  }
-  lastSampleTs = p.ts;
-  serverOffset = smoothOffset(serverOffset, p.ts - Date.now());
-  if (!keepaliveId) keepaliveTick();
-  if (!chart) return;
-  const rx = chart.data.datasets[0]!.data, tx = chart.data.datasets[1]!.data;
-  if (needsFullRedraw(rx, p.ts)) { redrawChart(); return; }
-  rx.push({ x: p.ts, y: p.rx_mbps });
-  tx.push({ x: p.ts, y: p.tx_mbps });
-  // Scale advance and rendering are the keepalive's job.
-}
-
-export function noteTrafficUpdate(sample: TrafficSample): void {
-  if (!currentIf || sample.ifName !== currentIf) return;
-  // Buffered ALWAYS, even hidden or on another page: only the DOM update is
-  // deferred, so history survives a backgrounded tab rather than developing a
-  // hole in it.
-  pushSample(allPoints, sample);
-  pendingTraffic = sample;
-  if (!trafficRafId) trafficRafId = requestAnimationFrame(flushTraffic);
-}
-
 /**
  * Should this arriving history be answered by asking for the operator's pick
  * back?
@@ -369,145 +204,366 @@ export function shouldRestorePick(
   return options.indexOf(picked) !== -1;
 }
 
-export function onTrafficHistory(data: TrafficHistory): void {
-  currentIf = data.ifName || '';
-  const sel = el<HTMLSelectElement>('ifaceSelect');
-  if (sel) sel.value = data.ifName || '';
+/** One Traffic card: the Dashboard's own, or a copy following a device of its own. */
+export interface TrafficCard {
+  note(sample: TrafficSample): void;
+  onHistory(data: TrafficHistory): void;
+  applyWindow(secs: number): void;
+  resume(): void;
+  resetOnReconnect(): void;
+  reset(): void;
+  /** How the card asks for an interface: the selection's `traffic:select`, or a copy's own watch. */
+  setRequester(fn: (ifName: string) => void): void;
+  /** The operator picked an interface in this card's own select. */
+  pick(ifName: string): void;
+  /** Stop the keepalive and free the chart: a copy being removed. */
+  destroy(): void;
+  points(): TrafficPoint[];
+  clock(): { lastSampleTs: number; serverOffset: number; windowSecs: number };
+}
 
-  // A reconnect arrives here with the server's default, because the new socket
-  // has a new subscription. If the operator had chosen something else, ask for
-  // it back.
-  //
-  // GUARDED ON THE PICK STILL BEING IN THE LIST, which is what keeps this from
-  // fighting the auto-switch: when an interface goes down it leaves the options,
-  // `rebuildIfaceSelect` moves to the first live one, and this stays quiet
-  // because the pick is no longer selectable. It resumes if the interface comes
-  // back and the socket reconnects.
-  //
-  // NO LOOP: this only reacts to history ARRIVING, and the re-request produces
-  // history naming the pick itself, which fails the first condition.
-  // THE PICK IS TESTED BEFORE THE OPTIONS ARE READ, and that order is not
-  // cosmetic. The live condition is `_userPickedIf && … && [].some.call(
-  // ifaceSelect.options, …)`, which short-circuits: with no pick, the options
-  // are never touched. Extracting the decision into a function made the list an
-  // ARGUMENT, so it was built eagerly - and `Array.prototype.map` on a select
-  // with no `options` throws, which two gates caught immediately on a minimal
-  // payload. An extraction that changes evaluation order is not a refactor.
-  if (sel && userPickedIf && shouldRestorePick(data.ifName, userPickedIf,
-    Array.prototype.map.call(sel.options || [], (o: HTMLOptionElement) => o.value) as string[])) {
-    sel.value = userPickedIf;
-    requestInterface?.(userPickedIf);
-    // The history for the pick is on its way; drawing this one first would flash.
-    return;
+/**
+ * A Traffic card drawing into `s` (see dashboard-card-scope.ts). `connected` is
+ * whether its router is up: the keepalive stops for a router that is down, and
+ * a copy must not stop because the SELECTED router went down.
+ */
+export function createTrafficCard(s: CardScope, connected: () => boolean): TrafficCard {
+  let chart: ChartLike | null = null;
+  let allPoints: TrafficPoint[] = [];
+  let currentIf = '';
+  let windowSecs = 60;
+  let lastSampleTs = 0, serverOffset = 0;
+  let yMaxTarget = 0, yMaxCurrent = 0, lastTickMs = 0;
+  // The right buffer AS DRAWN, eased toward `rightBufferFor`'s step function so
+  // the axis edge can neither reverse nor stall. See `easeBuffer`. It sits beside
+  // `yMaxCurrent` because it is the same idea on the other axis, and it follows
+  // the same split: eased on the keepalive, SNAPPED on a redraw.
+  let rbCurrent = RIGHT_BUFFER_MS;
+  let keepaliveId: number | null = null;
+  let pendingTraffic: TrafficSample | null = null;
+  let trafficRafId: number | null = null;
+
+
+  function makeChartObj(): void {
+    if (chart) { chart.destroy(); chart = null; }
+    const canvas = s.q('trafficChart');
+    if (!canvas || typeof Chart === 'undefined') return;
+    chart = new Chart(canvas, chartConfig(Date.now(), windowSecs));
   }
 
-  const pts = data.points || [];
-  initChart(pts);
-  if (pts.length) {
-    const last = pts[pts.length - 1]!;
-    const rx = el('liveRx'), tx = el('liveTx');
-    if (rx) rx.textContent = fmtMbps(last.rx_mbps);
-    if (tx) tx.textContent = fmtMbps(last.tx_mbps);
+  // ── THE SHARED BUFFER, READ BY THE BANDWIDTH PAGE ───────────────────────────
+  //
+  // The live app gets this for free: `app.js:6950` builds the Bandwidth chart's
+  // points from `allPoints`, the same module-scope array the dashboard chart uses,
+  // because both live in one file scope. ONE buffer, two readers.
+  //
+  // This port has them in separate modules, so the sharing has to be deliberate -
+  // and it must be an ACCESSOR, not the array. `allPoints` is REASSIGNED
+  // (`initChart` replaces it from history, `reset` empties it), so a consumer that
+  // captured the array once would keep reading a detached copy and quietly diverge
+  // the moment either happened. Returning it per call cannot.
+  //
+  // The alternative - a second buffer fed from the same `traffic:update` - is the
+  // thing the port record warns against: two arrays pruned by two rules drift apart,
+  // and the drift only shows up as two charts disagreeing about the same second.
+  function sharedPoints(): TrafficPoint[] { return allPoints; }
+
+  /** The shared clock the keepalives anchor to: `Date.now() + serverOffset`, and
+   *  zero for `lastSampleTs` until the first sample has arrived. Both are updated
+   *  by the dashboard's own handler for EVERY sample regardless of which page is
+   *  open, which is what keeps a returning page's clock warm. */
+  function sharedClock(): { lastSampleTs: number; serverOffset: number; windowSecs: number } {
+    return { lastSampleTs, serverOffset, windowSecs };
   }
-  // A new router's history must not trip the 10s stale threshold while that
-  // router is still connecting.
-  notePayload('trafficCard');
+
+  function redrawChart(): void {
+    // MEASURED FROM THE SAMPLES, not assumed to be a second: a router in stream
+    // mode does not deliver on a metronome, and a fixed gap leaves the line short
+    // of the right edge whenever one arrives late. See rightBufferFor.
+    const rb = rightBufferFor(allPoints);
+    const pts = windowedPoints(allPoints, Date.now(), windowSecs, rb);
+    if (!chart) makeChartObj();
+    if (!chart) return;
+    chart.data.datasets[0]!.data = pts.map((p) => ({ x: p.ts, y: p.rx_mbps }));
+    chart.data.datasets[1]!.data = pts.map((p) => ({ x: p.ts, y: p.tx_mbps }));
+    let dMax = 0;
+    for (const p of pts) {
+      if (p.rx_mbps > dMax) dMax = p.rx_mbps;
+      if (p.tx_mbps > dMax) dMax = p.tx_mbps;
+    }
+    yMaxTarget = dMax || 1;
+    // Set, NOT eased: a redraw is a discontinuity already, and easing the axis
+    // from the old scale would animate a change the data did not make.
+    yMaxCurrent = yMaxTarget;
+    chart.options.scales.y.max = yMaxCurrent;
+    // SNAPPED, like `yMaxCurrent` two lines up and for the same reason: a redraw
+    // is a discontinuity already - a new interface, a new router, a new window -
+    // so easing the edge across it would animate a change the data did not make.
+    rbCurrent = rb;
+    const anchor = anchorMs(lastSampleTs, serverOffset, Date.now(), pts);
+    const win = axisWindow(anchor, windowSecs, rb);
+    chart.options.scales.x.min = win.min;
+    chart.options.scales.x.max = win.max;
+    chart.update('none');
+  }
+
+  function applyWindow(secs: number): void {
+    windowSecs = secs;
+    redrawChart();
+  }
+
+  function initChart(points: TrafficPoint[] | undefined): void {
+    allPoints = (points || []).slice(-MAX_CLIENT_POINTS);
+    if (!chart) makeChartObj();
+    redrawChart();
+  }
+
+  /**
+   * Bring a returning tab's chart up to now, from the handler that reports it visible.
+   *
+   * Nothing is hidden on the way out: the keepalive already stops while the tab is
+   * hidden, and samples keep landing in `allPoints`. So on return the newest
+   * sample is applied at once rather than on the next frame, and the chart is
+   * rebuilt from the buffer at the current time. This runs before the browser
+   * paints the returning page, so the first frame is already current: no blank,
+   * no fade and no catch-up scroll.
+   *
+   * Skipped under the same conditions the keepalive stops for, so the chart of a
+   * router that is down, or of a socket that is disconnected, is not scrolled away
+   * from its last data.
+   */
+  function resumeTrafficChart(): void {
+    if (!chart || document.hidden || !connected()) return;
+    if (trafficRafId) { cancelAnimationFrame(trafficRafId); trafficRafId = null; }
+    flushTraffic();
+    redrawChart();
+  }
+
+  function keepaliveTick(): void {
+    keepaliveId = requestAnimationFrame(keepaliveTick);
+    if (!chart || document.hidden || !lastSampleTs || !connected()) return;
+    const now = Date.now();
+    if (now - lastTickMs < 33) return;
+    const prevTickMs = lastTickMs;
+    lastTickMs = now;
+    const sn = now + serverOffset;
+    // EASED, NOT TAKEN. `lastTickMs` was read above, so `elapsed` is the real gap
+    // between frames and the bound is against wall time rather than frame count -
+    // a slow frame may move the buffer further, and a fast one less.
+    const elapsed = now - prevTickMs;
+    rbCurrent = easeBuffer(rbCurrent, rightBufferFor(allPoints), elapsed);
+    const rb = rbCurrent;
+    const vl = sn - windowSecs * 1000 - rb;
+    const rd = chart.data.datasets[0]!.data, td = chart.data.datasets[1]!.data;
+    yMaxTarget = pruneAndMax(rd, td, vl) || 1;
+    yMaxCurrent = smoothMax(yMaxCurrent, yMaxTarget);
+    chart.options.scales.y.max = yMaxCurrent;
+    chart.options.scales.x.min = vl;
+    chart.options.scales.x.max = sn - rb;
+    chart.update('none');
+  }
+
+  function flushTraffic(): void {
+    trafficRafId = null;
+    if (!pendingTraffic) return;
+    const p = pendingTraffic;
+    pendingTraffic = null;
+    if (!document.hidden) {
+      const rx = s.q('liveRx'), tx = s.q('liveTx');
+      if (rx) rx.textContent = fmtMbps(p.rx_mbps);
+      if (tx) tx.textContent = fmtMbps(p.tx_mbps);
+    }
+    lastSampleTs = p.ts;
+    serverOffset = smoothOffset(serverOffset, p.ts - Date.now());
+    if (!keepaliveId) keepaliveTick();
+    if (!chart) return;
+    const rx = chart.data.datasets[0]!.data, tx = chart.data.datasets[1]!.data;
+    if (needsFullRedraw(rx, p.ts)) { redrawChart(); return; }
+    rx.push({ x: p.ts, y: p.rx_mbps });
+    tx.push({ x: p.ts, y: p.tx_mbps });
+    // Scale advance and rendering are the keepalive's job.
+  }
+
+  function noteTrafficUpdate(sample: TrafficSample): void {
+    if (!currentIf || sample.ifName !== currentIf) return;
+    // Buffered ALWAYS, even hidden or on another page: only the DOM update is
+    // deferred, so history survives a backgrounded tab rather than developing a
+    // hole in it.
+    pushSample(allPoints, sample);
+    pendingTraffic = sample;
+    if (!trafficRafId) trafficRafId = requestAnimationFrame(flushTraffic);
+  }
+
+
+  function onTrafficHistory(data: TrafficHistory): void {
+    currentIf = data.ifName || '';
+    const sel = s.q<HTMLSelectElement>('ifaceSelect');
+    if (sel) sel.value = data.ifName || '';
+
+    // A reconnect arrives here with the server's default, because the new socket
+    // has a new subscription. If the operator had chosen something else, ask for
+    // it back.
+    //
+    // GUARDED ON THE PICK STILL BEING IN THE LIST, which is what keeps this from
+    // fighting the auto-switch: when an interface goes down it leaves the options,
+    // `rebuildIfaceSelect` moves to the first live one, and this stays quiet
+    // because the pick is no longer selectable. It resumes if the interface comes
+    // back and the socket reconnects.
+    //
+    // NO LOOP: this only reacts to history ARRIVING, and the re-request produces
+    // history naming the pick itself, which fails the first condition.
+    // THE PICK IS TESTED BEFORE THE OPTIONS ARE READ, and that order is not
+    // cosmetic. The live condition is `_userPickedIf && … && [].some.call(
+    // ifaceSelect.options, …)`, which short-circuits: with no pick, the options
+    // are never touched. Extracting the decision into a function made the list an
+    // ARGUMENT, so it was built eagerly - and `Array.prototype.map` on a select
+    // with no `options` throws, which two gates caught immediately on a minimal
+    // payload. An extraction that changes evaluation order is not a refactor.
+    if (sel && userPickedIf && shouldRestorePick(data.ifName, userPickedIf,
+      Array.prototype.map.call(sel.options || [], (o: HTMLOptionElement) => o.value) as string[])) {
+      sel.value = userPickedIf;
+      requestInterface?.(userPickedIf);
+      // The history for the pick is on its way; drawing this one first would flash.
+      return;
+    }
+
+    const pts = data.points || [];
+    initChart(pts);
+    if (pts.length) {
+      const last = pts[pts.length - 1]!;
+      const rx = s.q('liveRx'), tx = s.q('liveTx');
+      if (rx) rx.textContent = fmtMbps(last.rx_mbps);
+      if (tx) tx.textContent = fmtMbps(last.tx_mbps);
+    }
+    // A new router's history must not trip the 10s stale threshold while that
+    // router is still connecting.
+    // The page's staleness marker is about the SELECTED router.
+    if (s.chrome) notePayload('trafficCard');
+  }
+
+  /**
+   * Forget the history: another router's samples are not this one's, and neither
+   * are samples from before a socket gap.
+   *
+   * ── WHAT THIS CLEARS, AND WHAT IT DELIBERATELY DOES NOT ─────────────────────
+   *
+   * `currentIf` and `allPoints`, which is exactly what the live app clears at both
+   * of its own sites - `app.js:2957` (socket `connect`) and `app.js:8048`
+   * (`router:switching`).
+   *
+   * It used to also zero `lastSampleTs`, `serverOffset` and `pendingTraffic`, and
+   * the live app clears none of those ANYWHERE. `serverOffset` is the one that
+   * matters: it is an EMA of the server/browser clock skew, and `app.js:2318`
+   * says in as many words that keeping it is what makes a resume smooth - "the
+   * keepalive bails on !_lastSampleTs and resumes cleanly from the (EMA-smoothed)
+   * _serverOffset when the next sample arrives, so there is no resume jump."
+   * Zeroing it made the next sample set the offset raw, which moves the first
+   * samples after a switch along the X axis. That is a user-visible difference in
+   * a chart, which is the line a port may not move.
+   */
+  /**
+   * The interface the OPERATOR chose, as opposed to the one currently streaming.
+   *
+   * Deliberately NOT cleared on socket connect, which is the whole point. The
+   * server keys its traffic subscription on the socket, and a reconnect is a new
+   * socket - so the subscription reverts to `defaultIf` and the operator's choice
+   * is simply gone. A network blip silently moved them back to the WAN interface
+   * minutes after they picked something else (upstream issue #119, second report).
+   * The page has not reloaded, so this survives and the choice can be restored.
+   *
+   * It IS cleared on a router switch, because a different router has different
+   * interfaces and carrying a name across would be meaningless.
+   *
+   * Ported from upstream `d7548b0`, found by the reset-contract audit on
+   * 2026-08-28 - the audit noticed the live `router:switching` handler clearing a
+   * variable this port had nothing to map onto.
+   */
+  let userPickedIf = '';
+
+  /**
+   * How the restore below asks for the operator's interface back.
+   *
+   * The live handler is a closure over the module's `socket`; this module takes it
+   * at init instead, because `onTrafficHistory` is also called by
+   * `pages/dashboard.ts` and gating the restore on which caller ran would make the
+   * behaviour depend on the page rather than on the reconnect.
+   */
+  let requestInterface: ((ifName: string) => void) | null = null;
+
+  /**
+   * What a RECONNECT forgets: the chart's history and nothing else.
+   *
+   * ── THIS EXISTS BECAUSE ONE FUNCTION COULD NOT SAY BOTH THINGS ─────────────
+   *
+   * The live app clears the chart at two moments with two DIFFERENT sets, written
+   * inline at each site: `socket.on('connect')` clears `currentIf` and
+   * `allPoints`; `router:switching` clears those AND `_userPickedIf`.
+   *
+   * This port had one `resetTraffic` wired to both. That was correct until
+   * upstream `d7548b0` added `_userPickedIf` to the switch site only - at which
+   * point the single function silently started clearing the operator's chosen
+   * interface on every reconnect, which is the exact symptom of issue #119's
+   * second report ("it seems to switch to ether2 after some time"). The function's
+   * own comment claimed the opposite, and `reset-contract-audit.js` records the
+   * asymmetry in a comment without asserting it, so every gate stayed green.
+   *
+   * Splitting is what makes the asymmetry expressible at all.
+   */
+  function resetTrafficOnReconnect(): void {
+    // Both of these, and only these - the live `connect` handler's own two
+    // statements. A socket gap otherwise leaves `allPoints` holding samples from
+    // before it, and the post-reconnect history is appended to them: a chart drawn
+    // straight across a period during which nothing was received.
+    currentIf = '';
+    allPoints = [];
+  }
+
+  /**
+   * What a ROUTER SWITCH forgets: the above, plus the operator's pick.
+   */
+  function resetTraffic(): void {
+    resetTrafficOnReconnect();
+    // Cleared HERE but NOT on reconnect, and the difference is the whole fix: a
+    // reconnect is the same operator looking at the same router, so their choice
+    // should survive it. A router switch is a different fleet of interfaces, and
+    // carrying a name across would either miss or, worse, match something
+    // unrelated that happens to share it.
+    userPickedIf = '';
+  }
+
+  return {
+    note: noteTrafficUpdate, onHistory: onTrafficHistory, applyWindow, resume: resumeTrafficChart,
+    resetOnReconnect: resetTrafficOnReconnect, reset: resetTraffic,
+    setRequester: (fn) => { requestInterface = fn; },
+    pick: (ifName) => { userPickedIf = ifName; },
+    destroy: () => {
+      if (keepaliveId) cancelAnimationFrame(keepaliveId);
+      if (trafficRafId) cancelAnimationFrame(trafficRafId);
+      keepaliveId = trafficRafId = null;
+      if (chart) { chart.destroy(); chart = null; }
+    },
+    points: sharedPoints, clock: sharedClock,
+  };
 }
 
-/**
- * Forget the history: another router's samples are not this one's, and neither
- * are samples from before a socket gap.
- *
- * ── WHAT THIS CLEARS, AND WHAT IT DELIBERATELY DOES NOT ─────────────────────
- *
- * `currentIf` and `allPoints`, which is exactly what the live app clears at both
- * of its own sites - `app.js:2957` (socket `connect`) and `app.js:8048`
- * (`router:switching`).
- *
- * It used to also zero `lastSampleTs`, `serverOffset` and `pendingTraffic`, and
- * the live app clears none of those ANYWHERE. `serverOffset` is the one that
- * matters: it is an EMA of the server/browser clock skew, and `app.js:2318`
- * says in as many words that keeping it is what makes a resume smooth - "the
- * keepalive bails on !_lastSampleTs and resumes cleanly from the (EMA-smoothed)
- * _serverOffset when the next sample arrives, so there is no resume jump."
- * Zeroing it made the next sample set the offset raw, which moves the first
- * samples after a switch along the X axis. That is a user-visible difference in
- * a chart, which is the line a port may not move.
- */
-/**
- * The interface the OPERATOR chose, as opposed to the one currently streaming.
- *
- * Deliberately NOT cleared on socket connect, which is the whole point. The
- * server keys its traffic subscription on the socket, and a reconnect is a new
- * socket - so the subscription reverts to `defaultIf` and the operator's choice
- * is simply gone. A network blip silently moved them back to the WAN interface
- * minutes after they picked something else (upstream issue #119, second report).
- * The page has not reloaded, so this survives and the choice can be restored.
- *
- * It IS cleared on a router switch, because a different router has different
- * interfaces and carrying a name across would be meaningless.
- *
- * Ported from upstream `d7548b0`, found by the reset-contract audit on
- * 2026-08-28 - the audit noticed the live `router:switching` handler clearing a
- * variable this port had nothing to map onto.
- */
-let userPickedIf = '';
-
-/**
- * How the restore below asks for the operator's interface back.
- *
- * The live handler is a closure over the module's `socket`; this module takes it
- * at init instead, because `onTrafficHistory` is also called by
- * `pages/dashboard.ts` and gating the restore on which caller ran would make the
- * behaviour depend on the page rather than on the reconnect.
- */
-let requestInterface: ((ifName: string) => void) | null = null;
-
-/**
- * What a RECONNECT forgets: the chart's history and nothing else.
- *
- * ── THIS EXISTS BECAUSE ONE FUNCTION COULD NOT SAY BOTH THINGS ─────────────
- *
- * The live app clears the chart at two moments with two DIFFERENT sets, written
- * inline at each site: `socket.on('connect')` clears `currentIf` and
- * `allPoints`; `router:switching` clears those AND `_userPickedIf`.
- *
- * This port had one `resetTraffic` wired to both. That was correct until
- * upstream `d7548b0` added `_userPickedIf` to the switch site only - at which
- * point the single function silently started clearing the operator's chosen
- * interface on every reconnect, which is the exact symptom of issue #119's
- * second report ("it seems to switch to ether2 after some time"). The function's
- * own comment claimed the opposite, and `reset-contract-audit.js` records the
- * asymmetry in a comment without asserting it, so every gate stayed green.
- *
- * Splitting is what makes the asymmetry expressible at all.
- */
-export function resetTrafficOnReconnect(): void {
-  // Both of these, and only these - the live `connect` handler's own two
-  // statements. A socket gap otherwise leaves `allPoints` holding samples from
-  // before it, and the post-reconnect history is appended to them: a chart drawn
-  // straight across a period during which nothing was received.
-  currentIf = '';
-  allPoints = [];
-}
-
-/**
- * What a ROUTER SWITCH forgets: the above, plus the operator's pick.
- */
-export function resetTraffic(): void {
-  resetTrafficOnReconnect();
-  // Cleared HERE but NOT on reconnect, and the difference is the whole fix: a
-  // reconnect is the same operator looking at the same router, so their choice
-  // should survive it. A router switch is a different fleet of interfaces, and
-  // carrying a name across would either miss or, worse, match something
-  // unrelated that happens to share it.
-  userPickedIf = '';
-}
+// ── THE DASHBOARD'S OWN COPY ────────────────────────────────────────────────
+//
+// Following the selected router, in the page's own markup. Its buffer is the
+// one the Bandwidth page reads (`sharedPoints`, above).
+const own = createTrafficCard(pageScope,
+  () => !isRosDisconnected() && !document.body.classList.contains('is-disconnected'));
+export const sharedPoints = own.points;
+export const sharedClock = own.clock;
+export const noteTrafficUpdate = own.note;
+export const onTrafficHistory = own.onHistory;
+export const resumeTrafficChart = own.resume;
+export const resetTrafficOnReconnect = own.resetOnReconnect;
+export const resetTraffic = own.reset;
 
 export function initTraffic(socket: Socket): void {
-  requestInterface = (ifName) => socket.emit('traffic:select', { ifName });
-  socket.on('traffic:history', (d) => onTrafficHistory(d));
-  socket.on('traffic:update', (d) => noteTrafficUpdate(d));
+  own.setRequester((ifName) => socket.emit('traffic:select', { ifName }));
+  socket.on('traffic:history', (d) => own.onHistory(d));
+  socket.on('traffic:update', (d) => own.note(d));
 
   const sel = el<HTMLSelectElement>('ifaceSelect');
   if (sel) {
@@ -517,10 +573,10 @@ export function initTraffic(socket: Socket): void {
       // has gone down, must not overwrite it - that is the app coping, not a
       // choice, and remembering it would mean a flap permanently rewrote what
       // the operator asked for.
-      userPickedIf = sel.value;
+      own.pick(sel.value);
       socket.emit('traffic:select', { ifName: sel.value });
     });
   }
   const win = el<HTMLSelectElement>('windowSelect');
-  if (win) win.addEventListener('change', () => applyWindow(WINDOW_OPTIONS[win.value] || 60));
+  if (win) win.addEventListener('change', () => own.applyWindow(WINDOW_OPTIONS[win.value] || 60));
 }

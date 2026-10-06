@@ -27,6 +27,7 @@ import { esc } from '../dom';
 import { dcEsc } from './dashboard-cards-util';
 import { portSvg } from './port-svg';
 import type { IfStatusPayload } from '../gen/payloads';
+import { pageScope, type CardScope } from './dashboard-card-scope';
 
 const PHYSICAL = ['ether', 'sfp', 'sfp-sfpplus'];
 
@@ -55,8 +56,9 @@ export function portsHtml(ifaces: readonly PortLike[]): string {
   }).join('');
 }
 
-export function renderPhysPortsCard(data: IfStatusPayload): void {
-  const panel = document.getElementById('dc-ifPortsPanel');
+/** The Physical Ports card drawing into `s` (see dashboard-card-scope.ts). */
+export function renderPhysPortsInto(s: CardScope, data: IfStatusPayload): void {
+  const panel = s.q('dc-ifPortsPanel');
   if (!panel) return;
 
   // `data.interfaces || []`, NOT `data && data.interfaces` - the live handler
@@ -70,4 +72,9 @@ export function renderPhysPortsCard(data: IfStatusPayload): void {
     return;
   }
   panel.innerHTML = portsHtml(ifaces);
+}
+
+/** The Dashboard's own copy, following the selected router. */
+export function renderPhysPortsCard(data: IfStatusPayload): void {
+  renderPhysPortsInto(pageScope, data);
 }

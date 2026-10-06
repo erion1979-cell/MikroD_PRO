@@ -3854,3 +3854,6 @@
 .dash-tab-act:hover:not(:disabled){color:var(--accent-rx);border-color:var(--border)}
 .dash-tab-act:disabled{opacity:.35;cursor:default}
 .dash-tab-sep{flex:1}
+/* A card copy's device picker, in its header (pages/dashboard-device-cards.ts). */
+.dash-dev-pick{margin-left:auto;max-width:11rem;background:var(--bg-input, transparent);color:var(--text-muted);border:1px solid var(--border);border-radius:6px;font-size:.68rem;padding:.1rem .3rem;cursor:pointer}
+.dash-dev-pick:hover{color:var(--accent-rx)}

@@ -9,20 +9,28 @@
 //
 // ── ONE GRID, SEVERAL LAYOUTS ───────────────────────────────────────────────
 //
-// Every card type still has one element on the page and follows the selected
-// device. A dashboard after the first is a list of the cards it shows, each
-// with its place; switching swaps the layout the editor holds, repositions the
-// cards and moves the room subscriptions from the old set to the new one.
-// A card bound to a device of its own is phase 2.
+// A dashboard after the first is a list of the cards it shows, each with its
+// place; switching swaps the layout the editor holds, repositions the cards and
+// moves the room subscriptions from the old set to the new one.
+//
+// ── AND ON IT, CARDS THAT FOLLOW A DEVICE OF THEIR OWN ──────────────────────
+//
+// The card types in DEVICE_CARDS appear there as copies, any number of each,
+// each following the selected device or one of its own
+// (dashboard-device-cards.ts). Every other type is still the one element on
+// the page, following the selection. The first dashboard keeps the originals.
 
 import { el, esc } from '../dom';
 import { DEFAULT_LAYOUT, type GridCard } from '../gen/grid-tables';
-import { mergeLayout } from './dashboard-grid-layout';
+import { mergeLayout, repairOverlaps } from './dashboard-grid-layout';
 import { applyLayout, loadLayout, saveLayout, syncDashRooms } from './dashboard-grid-store';
 import type { GridEditor } from './dashboard-grid-edit';
+import { COPY_PREFIX, DEVICE_CARDS, type CopySpec, type DeviceCards } from './dashboard-device-cards';
 
 /** One card on a dashboard after the first: DashboardCard in internal/server/dashboards_api.go. */
-export interface DashCard { uid: string; type: string; router: string; x: number; y: number; w: number; h: number }
+export interface DashCard {
+  uid: string; type: string; router: string; iface: string; x: number; y: number; w: number; h: number;
+}
 export interface Dashboard { id: string; name: string; cards: DashCard[] }
 export interface Dashboards { mainName: string; list: Dashboard[] }
 
@@ -30,22 +38,52 @@ export interface Dashboards { mainName: string; list: Dashboard[] }
 export const MAIN = '_main';
 const ACTIVE_KEY = 'mkd_dash_active';
 
-/** A stored dashboard as the editor's layout: its cards shown, every other type hidden. */
+const isDevice = (type: string): boolean => DEVICE_CARDS.includes(type);
+
+/** The copies a stored dashboard draws. */
+export function copiesOf(cards: readonly DashCard[]): CopySpec[] {
+  return cards.filter((c) => isDevice(c.type))
+    .map((c) => ({ uid: c.uid, type: c.type, router: c.router, iface: c.iface }));
+}
+
+/**
+ * A stored dashboard as the editor's layout: every other card type's original
+ * shown where the dashboard puts it or hidden, then one entry per copy.
+ */
 export function toGrid(cards: readonly DashCard[]): GridCard[] {
   const byType: Record<string, DashCard> = {};
-  for (const c of cards) byType[c.type] = c;
-  return mergeLayout(DEFAULT_LAYOUT.map((def) => {
+  for (const c of cards) if (!isDevice(c.type)) byType[c.type] = c;
+  const base = mergeLayout(DEFAULT_LAYOUT.map((def) => {
     const c = byType[def.id];
     return c
       ? { id: def.id, x: c.x, y: c.y, w: c.w, h: c.h, visible: true }
       : Object.assign({}, def, { visible: false });
   }));
+  const copies = cards.filter((c) => isDevice(c.type))
+    .map((c) => ({ id: COPY_PREFIX + c.uid, x: c.x, y: c.y, w: c.w, h: c.h, visible: true }));
+  return repairOverlaps([...base, ...copies]);
 }
 
-/** The editor's layout as stored cards: the visible ones, each its own type for now. */
-export function fromGrid(layout: readonly GridCard[]): DashCard[] {
-  return layout.filter((c) => c.visible)
-    .map((c) => ({ uid: c.id, type: c.id, router: '', x: c.x, y: c.y, w: c.w, h: c.h }));
+/**
+ * The editor's layout as stored cards. A copy is described by `specOf`; an
+ * original of a device card type (from duplicating the first dashboard, or a
+ * reset) becomes a copy following the selected device.
+ */
+export function fromGrid(
+  layout: readonly GridCard[], specOf: (id: string) => CopySpec | undefined = () => undefined,
+): DashCard[] {
+  const out: DashCard[] = [];
+  for (const c of layout) {
+    if (!c.visible) continue;
+    const at = { x: c.x, y: c.y, w: c.w, h: c.h };
+    if (c.id.startsWith(COPY_PREFIX)) {
+      const sp = specOf(c.id);
+      if (sp) out.push({ uid: sp.uid, type: sp.type, router: sp.router, iface: sp.iface, ...at });
+    } else {
+      out.push({ uid: c.id, type: c.id, router: '', iface: '', ...at });
+    }
+  }
+  return out;
 }
 
 /** A new dashboard id, unlike any in `taken`. */
@@ -75,8 +113,8 @@ function remember(id: string): void {
  * grid asks before applying the first dashboard's server copy.
  */
 export function initDashboardTabs(
-  editor: GridEditor, setSaver: (fn: (l: GridCard[]) => void) => void,
-): { mainShowing: () => boolean } {
+  editor: GridEditor, setSaver: (fn: (l: GridCard[]) => void) => void, devices: DeviceCards,
+): { mainShowing: () => boolean; copyChanged: () => void } {
   let data: Dashboards = { mainName: 'Overview', list: [] };
   let active = MAIN;
   const pageActive = (): boolean => !!el('page-dashboard')?.classList.contains('active');
@@ -108,12 +146,21 @@ export function initDashboardTabs(
     const focused = pageActive();
     if (focused) syncDashRooms(editor.getLayout(), false);
     active = id;
+    // The copies first: the layout positions their elements.
+    if (target) devices.mount(copiesOf(target.cards));
+    else devices.unmount();
     const layout = target ? toGrid(target.cards) : loadLayout();
     editor.setLayout(layout);
     applyLayout(layout);
     if (focused) syncDashRooms(layout, true);
     setSaver(target
-      ? (l) => { target.cards = fromGrid(l); persist(); }
+      ? (l) => {
+        target.cards = fromGrid(l, devices.spec);
+        persist();
+        // Redrawn from what was stored, which drops the copies removed while
+        // editing.
+        show(target.id);
+      }
       : saveLayout);
     remember(id);
     draw();
@@ -152,7 +199,7 @@ export function initDashboardTabs(
     if (data.list.length + 1 >= 20) { window.alert('There can be at most 20 dashboards.'); return; }
     const cur = active === MAIN ? data.mainName : data.list.find((d) => d.id === active)?.name || '';
     const name = cleanName(window.prompt('Name of the copy:', (cur + ' (copy)').slice(0, 40)));
-    if (name) add(name, fromGrid(editor.getLayout()));
+    if (name) add(name, fromGrid(editor.getLayout(), devices.spec));
   });
   el('dashTabDelete')?.addEventListener('click', () => {
     if (editor.isEditing()) return;
@@ -162,6 +209,32 @@ export function initDashboardTabs(
     persist();
     show(MAIN);
   });
+
+  // Adding a device card type on a named dashboard makes a copy, however many
+  // there already are; on the first dashboard it shows the original, as ever.
+  editor.setAddHook((id) => {
+    if (active === MAIN || !isDevice(id)) return false;
+    const def = DEFAULT_LAYOUT.find((d) => d.id === id);
+    const g = devices.add(id, { w: def?.w || 8, h: def?.h || 4 });
+    editor.insertCard(g);
+    editor.addCard(g.id);
+    return true;
+  });
+  // Discard puts the old layout back; a copy added since has no place in it,
+  // so the dashboard is redrawn from what is stored. After the editor's own
+  // handler, which was registered first.
+  el('dashDiscardBtn')?.addEventListener('click', () => { if (active !== MAIN) show(active); });
+
+  /** A copy's device or interface changed from its own controls: store it. */
+  function copyChanged(): void {
+    const d = data.list.find((x) => x.id === active);
+    if (!d) return;
+    for (const c of d.cards) {
+      const sp = devices.spec(COPY_PREFIX + c.uid);
+      if (sp) { c.router = sp.router; c.iface = sp.iface; }
+    }
+    persist();
+  }
 
   draw();
   void fetch('/api/dashboards', { credentials: 'same-origin' })
@@ -175,5 +248,5 @@ export function initDashboardTabs(
     })
     .catch(() => { /* the first dashboard still shows; no tabs beyond it */ });
 
-  return { mainShowing: () => active === MAIN };
+  return { mainShowing: () => active === MAIN, copyChanged };
 }

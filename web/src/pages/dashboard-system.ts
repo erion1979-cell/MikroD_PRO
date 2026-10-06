@@ -30,7 +30,8 @@
 // being updated forever, and the temperature would disappear on router switch
 // and never come back.
 
-import { esc, el, fmtBytes, parseUptime } from '../dom';
+import { esc, fmtBytes, parseUptime } from '../dom';
+import { pageScope, type CardScope } from './dashboard-card-scope';
 import { gauge } from './dashboard-gauge';
 import type { SystemPayload } from '../gen/payloads';
 
@@ -53,137 +54,164 @@ import type { SystemPayload } from '../gen/payloads';
  */
 export interface UpdInfo { installed: string; latest: string; channel: string }
 
-let metaWritten = false;
-let pending: SystemPayload | null = null;
-let rafId: number | null = null;
-// The update row's last markup, as its own fingerprint. Reset on reconnect and
-// on a router switch, where the row is re-rendered from scratch.
-let lastUpdateRowHtml: string | null = null;
-
-/** Re-arm the write-once meta line: a reconnect, or a switch to another router. */
-export function resetSysMeta(): void {
-  metaWritten = false;
-  // The row is re-rendered from scratch after a reconnect, and MUST be after a
-  // router switch: two routers can report the same versions, so without this the
-  // strip would be suppressed as "unchanged" and keep showing the previous
-  // router's row. Both callers - the socket's `connect` and the router switch -
-  // already go through here.
-  lastUpdateRowHtml = null;
+/** One System card: the Dashboard's own, or a copy following a device of its own. */
+export interface SystemCard {
+  note(d: SystemPayload): void;
+  flush(): void;
+  flushPending(): void;
+  reset(): void;
 }
 
-export function flushSysUpdate(): void {
-  rafId = null;
-  if (document.hidden) return; // tab backgrounded - skip render, data stays pending
-  const d = pending;
-  if (!d) return;
-  pending = null;
+/** A System card drawing into `s` (see dashboard-card-scope.ts). */
+export function createSystemCard(s: CardScope): SystemCard {
+  let metaWritten = false;
+  let pending: SystemPayload | null = null;
+  let rafId: number | null = null;
+  // The update row's last markup, as its own fingerprint. Reset on reconnect and
+  // on a router switch, where the row is re-rendered from scratch.
+  let lastUpdateRowHtml: string | null = null;
 
-  const ut = parseUptime(d.uptimeRaw);
-  const uptimeDisplay = el('uptimeDisplay');
-  if (uptimeDisplay) uptimeDisplay.textContent = 'Uptime: ' + ut;
-  const uptimeChip = el('uptimeChip');
-  if (uptimeChip) {
-    uptimeChip.textContent = ut;
-    uptimeChip.style.display = '';
+  /** Re-arm the write-once meta line: a reconnect, or a switch to another router. */
+  function reset(): void {
+    metaWritten = false;
+    // The row is re-rendered from scratch after a reconnect, and MUST be after a
+    // router switch: two routers can report the same versions, so without this the
+    // strip would be suppressed as "unchanged" and keep showing the previous
+    // router's row. Both callers - the socket's `connect` and the router switch -
+    // already go through here.
+    lastUpdateRowHtml = null;
   }
 
-  // Storage only when the router HAS storage. `totalHdd > 0` and not merely
-  // truthy: a router reporting 0 draws two gauges, not three with an empty one.
-  let html = gauge('CPU', d.cpuLoad, 'cpu') + gauge('RAM', d.memPct, 'mem');
-  if (d.totalHdd > 0) html += gauge('Storage', d.hddPct, 'hdd');
-  const gaugeRow = el('gaugeRow');
-  if (gaugeRow) gaugeRow.innerHTML = html;
+  function flush(): void {
+    rafId = null;
+    if (document.hidden) return; // tab backgrounded - skip render, data stays pending
+    const d = pending;
+    if (!d) return;
+    pending = null;
 
-  const sysMeta = el('sysMeta');
-  if (!metaWritten && (d.boardName || d.version || d.cpuCount || d.totalMem)) {
-    let meta = '';
-    if (d.boardName) meta += '<div class="sys-meta-item"><strong>' + esc(d.boardName) + '</strong></div>';
-    if (d.version) meta += '<div class="sys-meta-item">ROS <strong>' + esc(d.version) + '</strong></div>';
-    if (d.cpuCount) meta += '<div class="sys-meta-item"><strong>' + esc(d.cpuCount) + '</strong>×CPU</div>';
-    if (d.cpuFreq) meta += '<div class="sys-meta-item"><strong>' + esc(d.cpuFreq) + '</strong> MHz</div>';
-    if (d.totalMem) meta += '<div class="sys-meta-item"><strong>' + fmtBytes(d.totalMem) + '</strong> RAM</div>';
-    if (sysMeta) sysMeta.innerHTML = meta;
-    metaWritten = true;
-  }
-
-  // AFTER the meta rewrite, deliberately. See the header.
-  const tempSlot = el('sysMetaTemp');
-  if (d.tempC != null) {
-    if (!tempSlot) {
-      const node = document.createElement('div');
-      node.className = 'sys-meta-item';
-      node.id = 'sysMetaTemp';
-      node.innerHTML = '<strong>' + esc(d.tempC) + '°C</strong>';
-      if (sysMeta) sysMeta.appendChild(node);
-    } else {
-      tempSlot.innerHTML = '<strong>' + esc(d.tempC) + '°C</strong>';
+    const ut = parseUptime(d.uptimeRaw);
+    const uptimeDisplay = s.q('uptimeDisplay');
+    if (uptimeDisplay) uptimeDisplay.textContent = 'Uptime: ' + ut;
+    // The top bar's chip describes the SELECTED router, so only the
+    // Dashboard's own copy writes it.
+    const uptimeChip = s.chrome ? s.q('uptimeChip') : null;
+    if (uptimeChip) {
+      uptimeChip.textContent = ut;
+      uptimeChip.style.display = '';
     }
-  }
 
-  const rosUpdateRow = el('rosUpdateRow');
-  if (rosUpdateRow) {
-    let ur = '';
-    // Held rather than dispatched here - see the dirty check below.
-    let updEvent: UpdInfo | null = null;
-    // The version the router is RUNNING. Hoisted because BOTH branches need it.
-    const installedBase = (d.version || '').replace(/\s*\(.*\)/, '').trim();
-    if (d.updateAvailable && d.latestVersion) {
-      // The Update button lands in #sysUpdateAction, filled by the upgrade
-      // module once it knows whether the viewer may reboot this router. Empty
-      // for everyone else, so the row is unchanged for a viewer who cannot act.
-      ur = '<div class="ros-update-row warn"><span class="ros-update-dot"></span>&#11014; ' +
-        esc(installedBase) + ' &rarr; <strong>' + esc(d.latestVersion) +
-        '</strong> available<span id="sysUpdateAction"></span></div>';
-      // Published rather than read back off the DOM: the versions are already
-      // parsed here, and the upgrade dialog should show what this row showed.
-      //
-      // Behind the dirty check below, because this event is not free: the
-      // listener redraws the Update button AND emits packages:caps, so firing it
-      // every tick cost a socket round trip per tick and re-created the button
-      // the row had just re-created.
-      updEvent = { installed: installedBase, latest: d.latestVersion, channel: d.updateChannel || '' };
-    } else if (d.latestVersion) {
-      // THE INSTALLED VERSION, NOT THE REPORTED LATEST. They are the same on a
-      // router that is genuinely current, and they are NOT when `latest-version`
-      // is OLDER than what is installed: the hAP ax3 reported 7.24.2 while
-      // running 7.24.3, and this row then read "RouterOS 7.24.2 - Up to date"
-      // about a router on 7.24.3. That state only reaches this branch since
-      // `updateVerdict` started ordering versions rather than comparing them
-      // (internal/collect/system.go); before, it drew a downgrade arrow instead.
-      ur = '<div class="ros-update-row ok"><span class="ros-update-dot"></span>&#10003; RouterOS <strong>' +
-        esc(installedBase || d.latestVersion) + '</strong> - Up to date</div>';
-    } else if (d.updateStatus) {
-      const isUnavail = /unavailable|cannot|error|failed/i.test(d.updateStatus);
-      const rowCls = isUnavail ? 'ros-update-row muted' : 'ros-update-row pending';
-      ur = '<div class="' + rowCls + '"><span class="ros-update-dot"></span>' + esc(d.updateStatus) + '</div>';
-    } else {
-      ur = '<div class="ros-update-row pending"><span class="ros-update-dot"></span>Checking for updates…</div>';
+    // Storage only when the router HAS storage. `totalHdd > 0` and not merely
+    // truthy: a router reporting 0 draws two gauges, not three with an empty one.
+    let html = gauge('CPU', d.cpuLoad, 'cpu') + gauge('RAM', d.memPct, 'mem');
+    if (d.totalHdd > 0) html += gauge('Storage', d.hddPct, 'hdd');
+    const gaugeRow = s.q('gaugeRow');
+    if (gaugeRow) gaugeRow.innerHTML = html;
+
+    const sysMeta = s.q('sysMeta');
+    if (!metaWritten && (d.boardName || d.version || d.cpuCount || d.totalMem)) {
+      let meta = '';
+      if (d.boardName) meta += '<div class="sys-meta-item"><strong>' + esc(d.boardName) + '</strong></div>';
+      if (d.version) meta += '<div class="sys-meta-item">ROS <strong>' + esc(d.version) + '</strong></div>';
+      if (d.cpuCount) meta += '<div class="sys-meta-item"><strong>' + esc(d.cpuCount) + '</strong>×CPU</div>';
+      if (d.cpuFreq) meta += '<div class="sys-meta-item"><strong>' + esc(d.cpuFreq) + '</strong> MHz</div>';
+      if (d.totalMem) meta += '<div class="sys-meta-item"><strong>' + fmtBytes(d.totalMem) + '</strong> RAM</div>';
+      if (sysMeta) sysMeta.innerHTML = meta;
+      metaWritten = true;
     }
-    // Dirty check. Without it the row was rewritten on every poll tick, which is
-    // what made the amber "available" strip and its Update button flash:
-    // innerHTML destroys and recreates the node, and a newly inserted .sbtn
-    // restarts its own transition. The markup IS the fingerprint here, so it
-    // cannot drift out of sync with what is rendered the way a hand-written
-    // field list can.
-    if (ur !== lastUpdateRowHtml) {
-      lastUpdateRowHtml = ur;
-      rosUpdateRow.innerHTML = ur;
-      // After the write, so the listener's draw() finds the #sysUpdateAction
-      // slot this markup just created rather than the one it replaced.
-      if (updEvent) {
-        document.dispatchEvent(new CustomEvent('mikrodash:updateavailable', { detail: updEvent }));
+
+    // AFTER the meta rewrite, deliberately. See the header.
+    const tempSlot = s.q('sysMetaTemp');
+    if (d.tempC != null) {
+      if (!tempSlot) {
+        const node = document.createElement('div');
+        node.className = 'sys-meta-item';
+        s.mark(node, 'sysMetaTemp');
+        node.innerHTML = '<strong>' + esc(d.tempC) + '°C</strong>';
+        if (sysMeta) sysMeta.appendChild(node);
+      } else {
+        tempSlot.innerHTML = '<strong>' + esc(d.tempC) + '°C</strong>';
+      }
+    }
+
+    const rosUpdateRow = s.q('rosUpdateRow');
+    if (rosUpdateRow) {
+      let ur = '';
+      // Held rather than dispatched here - see the dirty check below.
+      let updEvent: UpdInfo | null = null;
+      // The version the router is RUNNING. Hoisted because BOTH branches need it.
+      const installedBase = (d.version || '').replace(/\s*\(.*\)/, '').trim();
+      if (d.updateAvailable && d.latestVersion) {
+        // The Update button lands in #sysUpdateAction, filled by the upgrade
+        // module once it knows whether the viewer may reboot this router. Empty
+        // for everyone else, so the row is unchanged for a viewer who cannot act.
+        // A copy has no slot: the upgrade acts on the SELECTED router.
+        ur = '<div class="ros-update-row warn"><span class="ros-update-dot"></span>&#11014; ' +
+          esc(installedBase) + ' &rarr; <strong>' + esc(d.latestVersion) +
+          '</strong> available' + (s.chrome ? '<span id="sysUpdateAction"></span>' : '') + '</div>';
+        // Published rather than read back off the DOM: the versions are already
+        // parsed here, and the upgrade dialog should show what this row showed.
+        //
+        // Behind the dirty check below, because this event is not free: the
+        // listener redraws the Update button AND emits packages:caps, so firing it
+        // every tick cost a socket round trip per tick and re-created the button
+        // the row had just re-created.
+        if (s.chrome) {
+          updEvent = { installed: installedBase, latest: d.latestVersion, channel: d.updateChannel || '' };
+        }
+      } else if (d.latestVersion) {
+        // THE INSTALLED VERSION, NOT THE REPORTED LATEST. They are the same on a
+        // router that is genuinely current, and they are NOT when `latest-version`
+        // is OLDER than what is installed: the hAP ax3 reported 7.24.2 while
+        // running 7.24.3, and this row then read "RouterOS 7.24.2 - Up to date"
+        // about a router on 7.24.3. That state only reaches this branch since
+        // `updateVerdict` started ordering versions rather than comparing them
+        // (internal/collect/system.go); before, it drew a downgrade arrow instead.
+        ur = '<div class="ros-update-row ok"><span class="ros-update-dot"></span>&#10003; RouterOS <strong>' +
+          esc(installedBase || d.latestVersion) + '</strong> - Up to date</div>';
+      } else if (d.updateStatus) {
+        const isUnavail = /unavailable|cannot|error|failed/i.test(d.updateStatus);
+        const rowCls = isUnavail ? 'ros-update-row muted' : 'ros-update-row pending';
+        ur = '<div class="' + rowCls + '"><span class="ros-update-dot"></span>' + esc(d.updateStatus) + '</div>';
+      } else {
+        ur = '<div class="ros-update-row pending"><span class="ros-update-dot"></span>Checking for updates…</div>';
+      }
+      // Dirty check. Without it the row was rewritten on every poll tick, which is
+      // what made the amber "available" strip and its Update button flash:
+      // innerHTML destroys and recreates the node, and a newly inserted .sbtn
+      // restarts its own transition. The markup IS the fingerprint here, so it
+      // cannot drift out of sync with what is rendered the way a hand-written
+      // field list can.
+      if (ur !== lastUpdateRowHtml) {
+        lastUpdateRowHtml = ur;
+        rosUpdateRow.innerHTML = ur;
+        // After the write, so the listener's draw() finds the #sysUpdateAction
+        // slot this markup just created rather than the one it replaced.
+        if (updEvent) {
+          document.dispatchEvent(new CustomEvent('mikrodash:updateavailable', { detail: updEvent }));
+        }
       }
     }
   }
+
+  /** The `system:update` handler: store the latest, book at most one frame. */
+  function note(d: SystemPayload): void {
+    pending = d;
+    if (!rafId) rafId = requestAnimationFrame(flush);
+  }
+
+  /** Called when the tab becomes visible again - renders what arrived while hidden. */
+  function flushPending(): void {
+    if (pending && !rafId) rafId = requestAnimationFrame(flush);
+  }
+
+  return { note, flush, flushPending, reset };
 }
 
-/** The `system:update` handler: store the latest, book at most one frame. */
-export function noteSystemUpdate(d: SystemPayload): void {
-  pending = d;
-  if (!rafId) rafId = requestAnimationFrame(flushSysUpdate);
-}
-
-/** Called when the tab becomes visible again - renders what arrived while hidden. */
-export function flushPendingSystem(): void {
-  if (pending && !rafId) rafId = requestAnimationFrame(flushSysUpdate);
-}
+// ── THE DASHBOARD'S OWN COPY ────────────────────────────────────────────────
+//
+// Following the selected router, drawing into the page's own markup and chrome.
+const own = createSystemCard(pageScope);
+export const resetSysMeta = own.reset;
+export const flushSysUpdate = own.flush;
+export const noteSystemUpdate = own.note;
+export const flushPendingSystem = own.flushPending;

@@ -15,8 +15,10 @@ package server
 // The dashboard layout route stores `cards` as an opaque array because the
 // original did. This one is new, so it stores only what it has checked: every
 // name, id, card type and position. A card names its type from
-// `internal/dashcards` and, for now, no device: a card bound to one device is
-// phase 2, and a field nothing reads is refused rather than kept.
+// `internal/dashcards`; one of the types that can follow a device of its own
+// (dashwatch.go) may name a router, and a Traffic card an interface. Whether
+// the viewer may see that router is asked when the card is watched, every
+// time, not here: a grant can change after a dashboard is saved.
 
 import (
 	"encoding/json"
@@ -39,6 +41,7 @@ const (
 
 var (
 	dashboardIDRe  = regexp.MustCompile(`^[a-z0-9]{1,24}$`)
+	dashRouterIDRe = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
 	dashCardUIDRe  = regexp.MustCompile(`^[a-z0-9-]{1,40}$`)
 	dashboardsKind = "dashboards" // the user_layouts row
 )
@@ -48,6 +51,7 @@ type DashboardCard struct {
 	UID    string `json:"uid"`
 	Type   string `json:"type"`
 	Router string `json:"router"`
+	Iface  string `json:"iface"`
 	X      int    `json:"x"`
 	Y      int    `json:"y"`
 	W      int    `json:"w"`
@@ -160,8 +164,14 @@ func cleanDashboards(in Dashboards) (Dashboards, string) {
 			if !types[c.Type] {
 				return out, "unknown card type " + c.Type
 			}
-			if c.Router != "" {
-				return out, "cards bound to a device are not supported yet"
+			if c.Router != "" && (!dashWatchCards[c.Type] || !dashRouterIDRe.MatchString(c.Router)) {
+				return out, "only a device card may name a device, and by its id"
+			}
+			if c.Iface != "" {
+				if _, ok := dashboardName(c.Iface, ""); !ok || c.Type != "card-traffic" ||
+					len(c.Iface) > 64 {
+					return out, "only a Traffic card may name an interface"
+				}
 			}
 			if c.X < 1 || c.W < 1 || c.X+c.W-1 > dashcards.Cols ||
 				c.Y < 1 || c.Y > dashboardRowsMax || c.H < 1 || c.H > dashboardHMax {

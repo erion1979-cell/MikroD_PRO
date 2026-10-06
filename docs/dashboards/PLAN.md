@@ -35,12 +35,16 @@ yet converted, which can appear once per dashboard and follow the selected devic
    `user_layouts` row, `dashboards` (migration 36), validated by the server; the first keeps its own
    row, so nothing changes for anyone until they add a second. The tab strip sits above the grid;
    switching applies that dashboard's layout, and the existing editor edits and saves the active one.
-2. **Cards for any device.** A per-connection set of watched `(router, card type)` pairs, served the
-   way the device modal is (`internal/server/peek.go`): joining a demand room on each watched router
-   keeps the collectors those cards need running, and one declared event carries each router's
-   readings with its router id. Card types are converted to render into instances created from a
-   template, starting with the six above. Every watch is checked against the viewer's grant on
-   that router and the card's page, as a card room is today.
+2. **Cards for any device.** **Done for the first six.** Every frame a router's session sends names
+   that router (hub `Envelope.Router`); in the browser `socket.on` hears another router's frames
+   never, and `socket.onRouter` hears them all (`web/src/socket.ts`). `dash:watch` carries the
+   (router, card, interface) set the dashboard on screen shows; the server joins those rooms on each
+   router under the checks selecting it would pass, replays the last readings tagged, and lets demand
+   run the collectors (`internal/server/dashwatch.go`). The six cards were made into factories drawing
+   into a scope (`web/src/pages/dashboard-card-scope.ts`), so a copy is the original card cloned and
+   drawn by the same code (`dashboard-device-cards.ts`); the Dashboard's own copy is one of them. A
+   Traffic copy's backlog comes on `dash:traffic-history`, which the original chart never adopts.
+   The other card types follow in groups.
 3. **Load.** Each extra device on screen keeps its collectors running while the dashboard is open.
    A dashboard shows how many devices it reads, and the number of fixed devices is capped.
 4. **Sharing** (later): an administrator publishes a dashboard; each viewer still sees only the

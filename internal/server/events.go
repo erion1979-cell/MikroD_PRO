@@ -15,6 +15,7 @@ package server
 import (
 	"mikrodash/internal/alert"
 	"mikrodash/internal/backups"
+	"mikrodash/internal/collect"
 	"mikrodash/internal/db"
 	"mikrodash/internal/hub"
 	"mikrodash/internal/routers"
@@ -57,31 +58,35 @@ var (
 
 // Map payloads, whose browser types are hand-written in web/src/events-hand.ts.
 var (
-	EvAIChunk            = hub.Declare[map[string]any]("ai:chunk")
-	EvAIError            = hub.Declare[map[string]any]("ai:error")
-	EvAIHistory          = hub.Declare[map[string]any]("ai:history")
-	EvAIOverview         = hub.Declare[map[string]any]("ai:overview")
-	EvAIPropose          = hub.Declare[map[string]any]("ai:propose")
-	EvAIReply            = hub.Declare[map[string]any]("ai:reply")
-	EvAIWritten          = hub.Declare[map[string]any]("ai:written")
-	EvAccessNone         = hub.Declare[map[string]any]("access:none")
-	EvAccessRevoked      = hub.Declare[map[string]any]("access:revoked")
-	EvAlertsClearedAll   = hub.Declare[map[string]any]("alerts:cleared-all")
-	EvAlertsOpen         = hub.Declare[map[string]any]("alerts:open")
-	EvBackupsDiff        = hub.Declare[map[string]any]("backups:diff")
-	EvBackupsError       = hub.Declare[map[string]any]("backups:error")
-	EvBackupsRan         = hub.Declare[map[string]any]("backups:ran")
-	EvBackupsRestored    = hub.Declare[map[string]any]("backups:restored")
-	EvBackupsRestoring   = hub.Declare[map[string]any]("backups:restoring")
-	EvBackupsRunning     = hub.Declare[map[string]any]("backups:running")
-	EvCollectionConfig   = hub.Declare[map[string]any]("collection:config")
-	EvPackagesApplying   = hub.Declare[map[string]any]("packages:applying")
-	EvPackagesCaps       = hub.Declare[map[string]any]("packages:caps")
-	EvPackagesError      = hub.Declare[map[string]any]("packages:error")
-	EvPackagesNotes      = hub.Declare[map[string]any]("packages:notes")
-	EvPackagesOk         = hub.Declare[map[string]any]("packages:ok")
-	EvPermsChanged       = hub.Declare[map[string]any]("perms:changed")
-	EvPingHistory        = hub.Declare[map[string]any]("ping:history")
+	EvAIChunk          = hub.Declare[map[string]any]("ai:chunk")
+	EvAIError          = hub.Declare[map[string]any]("ai:error")
+	EvAIHistory        = hub.Declare[map[string]any]("ai:history")
+	EvAIOverview       = hub.Declare[map[string]any]("ai:overview")
+	EvAIPropose        = hub.Declare[map[string]any]("ai:propose")
+	EvAIReply          = hub.Declare[map[string]any]("ai:reply")
+	EvAIWritten        = hub.Declare[map[string]any]("ai:written")
+	EvAccessNone       = hub.Declare[map[string]any]("access:none")
+	EvAccessRevoked    = hub.Declare[map[string]any]("access:revoked")
+	EvAlertsClearedAll = hub.Declare[map[string]any]("alerts:cleared-all")
+	EvAlertsOpen       = hub.Declare[map[string]any]("alerts:open")
+	EvBackupsDiff      = hub.Declare[map[string]any]("backups:diff")
+	EvBackupsError     = hub.Declare[map[string]any]("backups:error")
+	EvBackupsRan       = hub.Declare[map[string]any]("backups:ran")
+	EvBackupsRestored  = hub.Declare[map[string]any]("backups:restored")
+	EvBackupsRestoring = hub.Declare[map[string]any]("backups:restoring")
+	EvBackupsRunning   = hub.Declare[map[string]any]("backups:running")
+	EvCollectionConfig = hub.Declare[map[string]any]("collection:config")
+	EvPackagesApplying = hub.Declare[map[string]any]("packages:applying")
+	EvPackagesCaps     = hub.Declare[map[string]any]("packages:caps")
+	EvPackagesError    = hub.Declare[map[string]any]("packages:error")
+	EvPackagesNotes    = hub.Declare[map[string]any]("packages:notes")
+	EvPackagesOk       = hub.Declare[map[string]any]("packages:ok")
+	EvPermsChanged     = hub.Declare[map[string]any]("perms:changed")
+	EvPingHistory      = hub.Declare[map[string]any]("ping:history")
+	// EvDashTrafficHistory is a Traffic card copy's backlog (dashwatch.go). A copy
+	// does not take `traffic:history`: the Dashboard's own chart adopts whatever
+	// interface that event names, and a copy on the selected router would move it.
+	EvDashTrafficHistory = hub.Declare[collect.TrafficHistory]("dash:traffic-history")
 	EvResError           = hub.Declare[map[string]any]("res:error")
 	EvResHistory         = hub.Declare[map[string]any]("res:history")
 	EvResNew             = hub.Declare[map[string]any]("res:new")

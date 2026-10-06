@@ -537,6 +537,12 @@ export interface TrafficPoint {
   tx_mbps: number;
 }
 
+export interface TrafficHistory {
+  ifName: string;
+  windowMinutes: number;
+  points: TrafficPoint[];
+}
+
 export interface LivePort {
   name: string;
   type: string;
@@ -1704,12 +1710,6 @@ export interface TopologyPayload {
   edges: TopoEdge[];
 }
 
-export interface TrafficHistory {
-  ifName: string;
-  windowMinutes: number;
-  points: TrafficPoint[];
-}
-
 export interface TrafficSample {
   ifName: string;
   ts: number;
@@ -2129,6 +2129,7 @@ export interface Events {
   'cfgdeploy:state': CfgDeployPayload;
   'conn:list': ConnListPayload;
   'conn:update': ConnsUpdate;
+  'dash:traffic-history': TrafficHistory;
   'device:live': Live;
   'diagnostics:update': Diagnostics;
   'dns:update': DNSPayload;

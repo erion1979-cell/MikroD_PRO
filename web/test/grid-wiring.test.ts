@@ -33,6 +33,10 @@ import path from 'node:path';
 import assert from 'node:assert';
 import { execFileSync } from 'node:child_process';
 
+// The grid hands a socket to the copies of device cards on named dashboards
+// (dashboard-device-cards.ts). This test drives the first dashboard, so the
+// socket only has to accept listeners and frames.
+const fakeSocket = { on() {}, onRouter() {}, emit() {}, selectedRouter: () => '' };
 const say = console.log.bind(console);
 const ROOT = process.env.MIKRODASH_ROOT || path.join(__dirname, '..', '..');
 const LIVE = path.resolve(process.env.MIKRODASH_SRC || path.join(ROOT, '..', 'MikroDash'));
@@ -213,7 +217,7 @@ function boot(layoutOverride) {
     return mine ? { ...mine } : { ...d, visible: false };
   });
   store[m.LS_KEY] = JSON.stringify({ cards: seeded });
-  const editor = m.initDashboardGrid();
+  const editor = m.initDashboardGrid(fakeSocket);
   return { dom, page, editor, store, mutations, resizes, LAY };
 }
 
@@ -245,7 +249,7 @@ function must(cond, msg) { if (!cond) problems.push(msg); }
   const m = require(OUT);
   let threw = null;
   let r;
-  try { r = m.initDashboardGrid(); } catch (e) { threw = e; }
+  try { r = m.initDashboardGrid(fakeSocket); } catch (e) { threw = e; }
   must(!threw, 'initDashboardGrid threw when the dashboard markup is absent: ' + (threw && threw.message));
   must(r === null, 'initDashboardGrid did not return null without a grid root');
 }

@@ -79,7 +79,7 @@ var (
 	logsRooms        = Rooms{"page-logs", "dash-card-logs"}
 	pppRooms         = Rooms{"page-ppp"}
 	packagesRooms    = Rooms{"page-packages"}
-	pingRooms        = Rooms{"page-dashboard"}
+	pingRooms        = Rooms{"page-dashboard", "dash-card-ping"}
 	rosUsersRooms    = Rooms{"page-users"}
 	queuesRooms      = Rooms{"page-queues"}
 	routingRooms     = Rooms{"page-routing", "page-dashboard"}

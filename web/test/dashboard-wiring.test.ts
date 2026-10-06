@@ -154,6 +154,13 @@ const HELPERS = new Set([
   // grid's layout and moves the room subscriptions; it listens to no socket
   // event and draws no card, so it is the page's chrome, not a card.
   'dashboard-tabs',
+  // Where a card finds its elements, so one card's code draws several copies
+  // (docs/dashboards/PLAN.md). Subscribes to nothing; a scope, not a card.
+  'dashboard-card-scope',
+  // The copies of device cards on named dashboards (docs/dashboards/PLAN.md).
+  // It listens through socket.onRouter to the same events the originals'
+  // CARDS entries are checked for, and draws with the originals' own code.
+  'dashboard-device-cards',
   // Persistence, DOM application and room bookkeeping for the grid. Same
   // caveat as the layout arithmetic: a helper until the module that WIRES the
   // grid lands.

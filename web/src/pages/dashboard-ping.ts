@@ -32,7 +32,7 @@
 // NOTHING IS HIDDEN BY THIS. The true value is still in the `max` figure in the
 // card header and in the bar's own tooltip; only the drawn height is bounded.
 
-import { el } from '../dom';
+import { pageScope, type CardScope } from './dashboard-card-scope';
 import { notePayload } from '../stale';
 import type { PingPayload, PingPoint } from '../gen/payloads';
 import type { HandEvents } from '../events-hand';
@@ -46,8 +46,6 @@ interface ChartLike {
 declare const Chart: undefined | (new (canvas: HTMLElement, cfg: unknown) => ChartLike);
 
 const MAX_PING_HIST = 60;
-let pingHistory: PingPoint[] = [];
-let pingChart: ChartLike | null = null;
 
 /** The CSS class for a round-trip figure. Absent is unclassified, not bad. */
 export function rttClass(rtt: number | null | undefined): string {
@@ -99,8 +97,7 @@ export function pingChartConfig(): unknown {
   };
 }
 
-function makePingChart(canvasId: string): ChartLike | null {
-  const ctx = el(canvasId);
+function makePingChart(ctx: HTMLElement | null): ChartLike | null {
   if (!ctx || typeof Chart === 'undefined') return null;
   return new Chart(ctx, pingChartConfig());
 }
@@ -159,71 +156,98 @@ export function updatePingChart(chart: ChartLike | null, history: PingPoint[]): 
   chart.update('none');
 }
 
-export function renderPingUI(
-  rtt: number | null | undefined, loss: number | null | undefined,
-  minRtt: number | null | undefined, maxRtt: number | null | undefined,
-): void {
-  const rttEl = el('ndPingRtt'), lossEl = el('ndPingLoss');
-  if (rttEl) {
-    rttEl.textContent = rtt != null ? String(rtt) : '-';
-    rttEl.className = 'ping-val ' + rttClass(rtt);
-  }
-  if (lossEl) {
-    lossEl.textContent = loss + '%';
-    // Loss has its own scale - see the header.
-    lossEl.className = 'ping-val ' + (loss === 0 ? 'ping-ok' : (loss as number) < 50 ? 'ping-warn' : 'ping-bad');
-  }
-  const minEl = el('ndPingMin'), maxEl = el('ndPingMax');
-  if (minEl) {
-    minEl.textContent = minRtt != null ? String(minRtt) : '-';
-    minEl.className = 'ping-val ' + rttClass(minRtt);
-  }
-  if (maxEl) {
-    maxEl.textContent = maxRtt != null ? String(maxRtt) : '-';
-    maxEl.className = 'ping-val ' + rttClass(maxRtt);
-  }
-  if (!pingChart) pingChart = makePingChart('pingChartNet');
-  updatePingChart(pingChart, pingHistory);
+/** One Ping card: the Dashboard's own, or a copy following a device of its own. */
+export interface PingCard {
+  onUpdate(data: PingPayload): void;
+  onHistory(data: HandEvents['ping:history']): void;
+  reset(): void;
+  /** Free the chart: a copy being removed. */
+  destroy(): void;
 }
 
-export function onPingHistory(data: HandEvents['ping:history']): void {
-  pingHistory = (data.history || []).slice(-MAX_PING_HIST);
-  const lbl = el('pingTargetLabel');
-  if (lbl && data.target) lbl.textContent = data.target;
-  if (pingHistory.length) {
-    const last = pingHistory[pingHistory.length - 1]!;
-    renderPingUI(last.rtt, last.loss, data.minRtt, data.maxRtt);
-  }
-}
+/** A Ping card drawing into `s` (see dashboard-card-scope.ts). */
+export function createPingCard(s: CardScope): PingCard {
+  let pingHistory: PingPoint[] = [];
+  let pingChart: ChartLike | null = null;
 
-export function onPingUpdate(data: PingPayload): void {
-  // THE NETWORKS CARD'S STALE TIMER, re-armed by every ping.
-  //
-  // A second `ping:update` handler in the live app does only this, ~100 lines
-  // before the renderer. The generated stale table has one event per card and
-  // records `lan:overview` for this one, so without this the card is kept alive
-  // by a payload that arrives every few MINUTES rather than every few seconds -
-  // and the ping block, which sits inside that card, would go on updating
-  // underneath a stale overlay.
-  notePayload('networksCard');
-  if (data.permissionDenied) {
-    const rttEl = el('ndPingRtt'), lossEl = el('ndPingLoss');
-    if (rttEl) { rttEl.textContent = '-'; rttEl.className = 'ping-val'; }
-    if (lossEl) {
-      lossEl.textContent = 'N/A';
-      lossEl.className = 'ping-val ping-warn';
-      lossEl.title = 'Add "test" policy to your RouterOS API user to enable ping';
+  function renderPingUI(
+    rtt: number | null | undefined, loss: number | null | undefined,
+    minRtt: number | null | undefined, maxRtt: number | null | undefined,
+  ): void {
+    const rttEl = s.q('ndPingRtt'), lossEl = s.q('ndPingLoss');
+    if (rttEl) {
+      rttEl.textContent = rtt != null ? String(rtt) : '-';
+      rttEl.className = 'ping-val ' + rttClass(rtt);
     }
-    return;
+    if (lossEl) {
+      lossEl.textContent = loss + '%';
+      // Loss has its own scale - see the header.
+      lossEl.className = 'ping-val ' + (loss === 0 ? 'ping-ok' : (loss as number) < 50 ? 'ping-warn' : 'ping-bad');
+    }
+    const minEl = s.q('ndPingMin'), maxEl = s.q('ndPingMax');
+    if (minEl) {
+      minEl.textContent = minRtt != null ? String(minRtt) : '-';
+      minEl.className = 'ping-val ' + rttClass(minRtt);
+    }
+    if (maxEl) {
+      maxEl.textContent = maxRtt != null ? String(maxRtt) : '-';
+      maxEl.className = 'ping-val ' + rttClass(maxRtt);
+    }
+    if (!pingChart) pingChart = makePingChart(s.q('pingChartNet'));
+    updatePingChart(pingChart, pingHistory);
   }
-  const lbl = el('pingTargetLabel');
-  if (lbl && data.target) lbl.textContent = data.target;
-  pingHistory.push({ ts: data.ts || Date.now(), rtt: data.rtt, loss: data.loss });
-  if (pingHistory.length > MAX_PING_HIST) pingHistory.shift();
-  renderPingUI(data.rtt, data.loss, data.minRtt, data.maxRtt);
+
+  function onPingHistory(data: HandEvents['ping:history']): void {
+    pingHistory = (data.history || []).slice(-MAX_PING_HIST);
+    const lbl = s.q('pingTargetLabel');
+    if (lbl && data.target) lbl.textContent = data.target;
+    if (pingHistory.length) {
+      const last = pingHistory[pingHistory.length - 1]!;
+      renderPingUI(last.rtt, last.loss, data.minRtt, data.maxRtt);
+    }
+  }
+
+  function onPingUpdate(data: PingPayload): void {
+    // THE NETWORKS CARD'S STALE TIMER, re-armed by every ping.
+    //
+    // A second `ping:update` handler in the live app does only this, ~100 lines
+    // before the renderer. The generated stale table has one event per card and
+    // records `lan:overview` for this one, so without this the card is kept alive
+    // by a payload that arrives every few MINUTES rather than every few seconds -
+    // and the ping block, which sits inside that card, would go on updating
+    // underneath a stale overlay.
+    // The page's staleness marker is about the SELECTED router.
+    if (s.chrome) notePayload('networksCard');
+    if (data.permissionDenied) {
+      const rttEl = s.q('ndPingRtt'), lossEl = s.q('ndPingLoss');
+      if (rttEl) { rttEl.textContent = '-'; rttEl.className = 'ping-val'; }
+      if (lossEl) {
+        lossEl.textContent = 'N/A';
+        lossEl.className = 'ping-val ping-warn';
+        lossEl.title = 'Add "test" policy to your RouterOS API user to enable ping';
+      }
+      return;
+    }
+    const lbl = s.q('pingTargetLabel');
+    if (lbl && data.target) lbl.textContent = data.target;
+    pingHistory.push({ ts: data.ts || Date.now(), rtt: data.rtt, loss: data.loss });
+    if (pingHistory.length > MAX_PING_HIST) pingHistory.shift();
+    renderPingUI(data.rtt, data.loss, data.minRtt, data.maxRtt);
+  }
+
+  /** A switch to another router shares no latency history. */
+  function resetPing(): void {
+    pingHistory = [];
+  }
+
+  return {
+    onUpdate: onPingUpdate, onHistory: onPingHistory, reset: resetPing,
+    destroy: () => { if (pingChart) { pingChart.destroy(); pingChart = null; } },
+  };
 }
 
-/** A switch to another router shares no latency history. */
-export function resetPing(): void {
-  pingHistory = [];
-}
+// ── THE DASHBOARD'S OWN COPY ────────────────────────────────────────────────
+const own = createPingCard(pageScope);
+export const onPingUpdate = own.onUpdate;
+export const onPingHistory = own.onHistory;
+export const resetPing = own.reset;

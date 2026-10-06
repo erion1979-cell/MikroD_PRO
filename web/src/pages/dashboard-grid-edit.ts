@@ -45,6 +45,11 @@ export interface GridEditor {
   enterEditMode(): void;
   exitEditMode(doSave: boolean): void;
   addCard(id: string): void;
+  /** Put a card in the layout, hidden, for `addCard` to place: a new copy of a
+   *  card that follows a device of its own (dashboard-device-cards.ts). */
+  insertCard(c: GridCard): void;
+  /** Answer an Add-panel click before the editor does: true when handled. */
+  setAddHook(fn: ((id: string) => boolean) | null): void;
   removeCard(id: string): void;
   renderAddPanel(): void;
   openAddPanel(): void;
@@ -74,6 +79,7 @@ export function createGridEditor(
   let layout = initial;
   let editSnapshot: GridCard[] = [];
   let editing = false;
+  let addHook: ((id: string) => boolean) | null = null;
 
   const getCard = (id: string): GridCard | undefined => layout.find((c) => c.id === id);
 
@@ -182,7 +188,10 @@ export function createGridEditor(
         chip.type = 'button';
         chip.className = 'dash-add-chip';
         chip.innerHTML = '<span>+</span>' + (CARD_LABELS[c.id] || c.id);
-        chip.addEventListener('click', () => addCard(c.id));
+        chip.addEventListener('click', () => {
+          if (addHook && addHook(c.id)) return;
+          addCard(c.id);
+        });
         chips.appendChild(chip);
       }
       panel.appendChild(chips);
@@ -216,6 +225,8 @@ export function createGridEditor(
     setLayout: (l) => { layout = l; },
     isEditing: () => editing,
     enterEditMode, exitEditMode, addCard, removeCard,
+    insertCard: (c) => { layout.push(c); },
+    setAddHook: (fn) => { addHook = fn; },
     renderAddPanel, openAddPanel, closeAddPanel, updateGridOverlay,
   };
 }

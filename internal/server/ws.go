@@ -85,6 +85,9 @@ type conn struct {
 	postMu   sync.Mutex
 	inboxOff bool
 	loopDone chan struct{}
+	// watch is the dashboard cards that follow a device of their own
+	// (dashwatch.go). Loop-owned, like the router fields above.
+	watch watchState
 	// trafficIf is the interface this viewer's chart is watching, if any. Held
 	// here rather than in the collector because it is a property of the VIEWER;
 	// the collector keeps only the refcount per interface.
@@ -290,6 +293,9 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	cn.srv.powerWatch(cn, "", false)
 	// The device modal's stream, which a closed tab never says goodbye to.
 	cn.unpeek()
+	// And every dashboard card following a device of its own: its streams are
+	// refcounted on those routers' collectors.
+	cn.dropWatches()
 	// The diagnostics ticker too: it is per socket, so a closing connection that
 	// left it running would repaint a card nobody has, for ever.
 	cn.diagBlur()
@@ -352,6 +358,8 @@ func (cn *conn) revalidator(ctx context.Context) {
 			// Releases for one Acquire, and a torn view of cn.sess).
 			cn.post(func() {
 				cn.setSession(live)
+				// A watch the new grants no longer allow is dropped here.
+				cn.applyWatches()
 				if cn.routerID != "" && !live.CanReadRouter(cn.routerID) {
 					// `releaseRouter` leaves every room this connection is in.
 					cn.releaseRouter()
@@ -496,6 +504,13 @@ func (cn *conn) dispatch(in inbound) {
 		}
 		cn.dashCardBlur(key)
 	// The Devices page's device modal: stream one router without selecting it.
+	// Dashboard cards following a device of their own: the whole set.
+	case "dash:watch":
+		var ws []dashWatch
+		if json.Unmarshal(in.Data, &ws) != nil {
+			return
+		}
+		cn.setWatches(ws)
 	case "device:peek":
 		var id string
 		if json.Unmarshal(in.Data, &id) != nil {
@@ -835,6 +850,9 @@ func (cn *conn) selectRouter(id string) {
 	// the page room is joined only if `page:focus` happened to arrive after this
 	// handler ran, which is a race the client cannot see and does not retry.
 	cn.rejoinPage()
+	// The watches, re-asked now the selection moved: a watch on the router just
+	// selected shares its rooms, and one on the router just left keeps its own.
+	cn.applyWatches()
 	cn.sendOpenAlerts(id)
 	cn.sendPageSettings()
 	// ── THE PER-ROUTER COLLECTION CONFIG ────────────────────────────────────
@@ -1690,7 +1708,8 @@ func (cn *conn) leaveRouterRooms() {
 		peekRoom = session.RoomFor(cn.peekID, collect.DevicePeekRoom)
 	}
 	for _, room := range cn.c.Rooms() {
-		if room == peekRoom {
+		// The dashboard's watches are not about the selection either.
+		if _, watched := cn.watch.rooms[room]; room == peekRoom || watched {
 			continue
 		}
 		cn.srv.hub.Leave(cn.c, room)

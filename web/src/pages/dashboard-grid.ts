@@ -34,9 +34,11 @@ import { createGridDrag } from './dashboard-grid-drag';
 import { createGridResize } from './dashboard-grid-resize';
 import { applyLayout, loadLayout, mergeLayoutFromServer, saveLayout, syncDashRooms } from './dashboard-grid-store';
 import { initDashboardTabs } from './dashboard-tabs';
+import { createDeviceCards, type DeviceCards, type DeviceRouter } from './dashboard-device-cards';
+import type { Socket } from '../socket';
 import { CARD_ROOMS, type GridCard } from '../gen/grid-tables';
 
-export function initDashboardGrid(): GridEditor | null {
+export function initDashboardGrid(socket: Socket): GridEditor | null {
   const gridRoot = el('dash-grid-root');
   // The Dashboard's markup is not on the page - nothing to wire. Returns rather
   // than throwing: the same guard the live `init` uses.
@@ -134,7 +136,13 @@ export function initDashboardGrid(): GridEditor | null {
   // The server's copy, which is what carries a layout between browsers. It
   // arrives AFTER the local one has already painted, so a slow request costs
   // nothing and a failed one leaves the local layout alone.
-  const tabs = initDashboardTabs(editor, (fn) => { saver = fn; });
+  // The copies of cards that follow a device of their own, on named
+  // dashboards. A change made in a copy's own controls is stored by the tabs.
+  let copyChanged = (): void => {};
+  devices = createDeviceCards(socket, () => copyChanged());
+  devices.setRouters(routersSeen);
+  const tabs = initDashboardTabs(editor, (fn) => { saver = fn; }, devices);
+  copyChanged = tabs.copyChanged;
 
   void mergeLayoutFromServer().then((merged) => {
     // The first dashboard's server copy is cached either way, and drawn only
@@ -145,4 +153,13 @@ export function initDashboardGrid(): GridEditor | null {
   });
 
   return editor;
+}
+
+let devices: DeviceCards | null = null;
+let routersSeen: readonly DeviceRouter[] = [];
+
+/** The fleet, for the device pickers and the Bandwidth copies' capacity. */
+export function setDashboardRouters(list: readonly DeviceRouter[]): void {
+  routersSeen = list;
+  devices?.setRouters(list);
 }

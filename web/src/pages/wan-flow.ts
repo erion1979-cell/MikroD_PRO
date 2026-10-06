@@ -54,6 +54,12 @@ export interface WanFlowOptions {
   visible: () => boolean;
   /** What to say when there are no uplinks. */
   noUplinks: string;
+  /** How its elements are found: by id across the page unless it is a copy
+   *  (dashboard-card-scope.ts). */
+  find?: (id: string) => HTMLElement | null;
+  /** Whether its router is up. The selected router's banner state unless a
+   *  copy follows another router. */
+  connected?: () => boolean;
 }
 
 export interface WanFlow {
@@ -130,6 +136,8 @@ export function boxLayout(flow: Flow, boxW: number, boxH: number): Layout {
 
 export function createWanFlow(socket: Socket, o: WanFlowOptions): WanFlow {
   const ids = { card: o.cardId, wrap: o.wrapId, svg: o.svgId, empty: o.emptyId };
+  const find = o.find || ((id: string) => el(id));
+  const connected = o.connected || (() => !isRosDisconnected());
   let flow: Flow = { rx: 0, tx: 0, ecmp: 0, rows: [] };
   let target: Layout | null = null;
   let drawn: Drawn[] = [];
@@ -138,7 +146,7 @@ export function createWanFlow(socket: Socket, o: WanFlowOptions): WanFlow {
   let socketUp = true;
   let looping = false;
   let lastT = 0;
-  const live = (): boolean => o.visible() && socketUp && !isRosDisconnected() && !document.hidden;
+  const live = (): boolean => o.visible() && socketUp && connected() && !document.hidden;
 
   /** Build the drawing for this set of uplinks at this size. */
   function build(host: SVGSVGElement, L: Layout): void {
@@ -222,18 +230,18 @@ export function createWanFlow(socket: Socket, o: WanFlowOptions): WanFlow {
       d.share.textContent = Math.round(r.share) + '%';
       d.bar.setAttribute('width', (d.track * r.share / 100).toFixed(1));
     });
-    const empty = el(ids.empty);
+    const empty = find(ids.empty);
     const why = !flow.rows.length ? o.noUplinks
       : !ratesAvailable ? 'Waiting for interface rates. They come from the interface status collector.' : '';
     if (empty) { empty.textContent = why; empty.hidden = !why; }
-    el(ids.card)?.classList.toggle('is-paused', !live());
+    find(ids.card)?.classList.toggle('is-paused', !live());
   }
 
   /** Lay out and draw for the current reading, at the current size. */
   function draw(): void {
     if (!o.visible()) return;
-    const host = el(ids.svg) as unknown as SVGSVGElement | null;
-    const wrap = el(ids.wrap);
+    const host = find(ids.svg) as unknown as SVGSVGElement | null;
+    const wrap = find(ids.wrap);
     if (!host || !wrap) return;
     const w = wrap.clientWidth, h = wrap.clientHeight;
     if (o.fit === 'box' && (!w || !h)) return;
@@ -254,7 +262,7 @@ export function createWanFlow(socket: Socket, o: WanFlowOptions): WanFlow {
 
   /** Ease every band toward its target, and move the particles. */
   function frame(t: number): void {
-    if (!live() || !target) { looping = false; el(ids.card)?.classList.add('is-paused'); return; }
+    if (!live() || !target) { looping = false; find(ids.card)?.classList.add('is-paused'); return; }
     if (t - lastT >= 33) {
       const dt = lastT ? Math.min(0.1, (t - lastT) / 1000) : 0;
       lastT = t;
@@ -285,7 +293,7 @@ export function createWanFlow(socket: Socket, o: WanFlowOptions): WanFlow {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) draw(); });
   // The size decides the layout: a resized window, or a resized dashboard
   // card, redraws at its new size.
-  const wrap = el(ids.wrap);
+  const wrap = find(ids.wrap);
   if (wrap && typeof ResizeObserver === 'function') {
     let lastW = 0, lastH = 0;
     new ResizeObserver(() => {

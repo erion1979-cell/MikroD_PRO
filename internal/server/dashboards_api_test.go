@@ -42,7 +42,7 @@ func TestDashboardsRoundTripTidied(t *testing.T) {
 	}
 	rec := layoutReq(t, h, "POST", "/api/dashboards", `{"mainName":"  Main  ","list":[
 	  {"id":"ho","name":" Head Office ","cards":[
-	    {"uid":"card-traffic","type":"card-traffic","router":"","x":1,"y":1,"w":24,"h":5},
+	    {"uid":"card-traffic-x1","type":"card-traffic","router":"r-B","iface":"ether1","x":1,"y":1,"w":24,"h":5},
 	    {"uid":"dc-card-power","type":"dc-card-power","router":"","x":1,"y":6,"w":8,"h":5}]},
 	  {"id":"spare","name":"Spare"}]}`, token)
 	if rec.Code != http.StatusOK {
@@ -50,7 +50,8 @@ func TestDashboardsRoundTripTidied(t *testing.T) {
 	}
 	d := get()
 	if d.MainName != "Main" || len(d.List) != 2 || d.List[0].Name != "Head Office" ||
-		len(d.List[0].Cards) != 2 || d.List[0].Cards[1].Type != "dc-card-power" {
+		len(d.List[0].Cards) != 2 || d.List[0].Cards[1].Type != "dc-card-power" ||
+		d.List[0].Cards[0].Router != "r-B" || d.List[0].Cards[0].Iface != "ether1" {
 		t.Errorf("after save: %+v", d)
 	}
 	if d.List[1].Cards == nil {
@@ -77,24 +78,27 @@ func TestDashboardsAreRefusedWhenMalformed(t *testing.T) {
 		many[i] = dash(fmt.Sprintf("d%d", i), "D", "")
 	}
 	cases := map[string]string{
-		"a malformed id":       dash("Head Office", "x", ""),
-		"a repeated id":        dash("a", "x", "") + "," + dash("a", "y", ""),
-		"no name":              dash("a", "   ", ""),
-		"a control character":  dash("a", "x\x07", ""),
-		"a long name":          dash("a", strings.Repeat("n", 41), ""),
-		"an unknown card type": dash("a", "x", card(`,"type":"card-nope"`)),
-		"a card on a device":   dash("a", "x", card(`,"router":"r-A"`)),
-		"a card off the right": dash("a", "x", card(`,"x":22,"w":4`)),
-		"a card at row zero":   dash("a", "x", card(`,"y":0`)),
-		"a repeated card uid":  dash("a", "x", card("")+","+card("")),
-		"a malformed card uid": dash("a", "x", card(`,"uid":"Card 1"`)),
-		"a card at column 0":   dash("a", "x", card(`,"x":0`)),
-		"a card 0 wide":        dash("a", "x", card(`,"w":0`)),
-		"a card 0 high":        dash("a", "x", card(`,"h":0`)),
-		"a card 101 high":      dash("a", "x", card(`,"h":101`)),
-		"a card at row 501":    dash("a", "x", card(`,"y":501`)),
-		"101 cards":            dash("a", "x", hundredAndOne()),
-		"21 dashboards":        strings.Join(many, ","),
+		"a malformed id":          dash("Head Office", "x", ""),
+		"a repeated id":           dash("a", "x", "") + "," + dash("a", "y", ""),
+		"no name":                 dash("a", "   ", ""),
+		"a control character":     dash("a", "x\x07", ""),
+		"a long name":             dash("a", strings.Repeat("n", 41), ""),
+		"an unknown card type":    dash("a", "x", card(`,"type":"card-nope"`)),
+		"an original on a device": dash("a", "x", card(`,"type":"dc-card-power","router":"r-A"`)),
+		"a malformed device":      dash("a", "x", card(`,"router":"r A"`)),
+		"an interface on System":  dash("a", "x", card(`,"type":"card-system","iface":"ether1"`)),
+		"a long interface":        dash("a", "x", card(`,"iface":"`+strings.Repeat("e", 65)+`"`)),
+		"a card off the right":    dash("a", "x", card(`,"x":22,"w":4`)),
+		"a card at row zero":      dash("a", "x", card(`,"y":0`)),
+		"a repeated card uid":     dash("a", "x", card("")+","+card("")),
+		"a malformed card uid":    dash("a", "x", card(`,"uid":"Card 1"`)),
+		"a card at column 0":      dash("a", "x", card(`,"x":0`)),
+		"a card 0 wide":           dash("a", "x", card(`,"w":0`)),
+		"a card 0 high":           dash("a", "x", card(`,"h":0`)),
+		"a card 101 high":         dash("a", "x", card(`,"h":101`)),
+		"a card at row 501":       dash("a", "x", card(`,"y":501`)),
+		"101 cards":               dash("a", "x", hundredAndOne()),
+		"21 dashboards":           strings.Join(many, ","),
 	}
 	for what, list := range cases {
 		if _, msg := cleanDashboards(mustDashboards(t, `{"list":[`+list+`]}`)); msg == "" {
@@ -106,7 +110,7 @@ func TestDashboardsAreRefusedWhenMalformed(t *testing.T) {
 	if rec := layoutReq(t, h, "POST", "/api/dashboards", `{"list":[`+strings.Join(many[:19], ",")+`]}`, token); rec.Code != http.StatusOK {
 		t.Errorf("20 dashboards in all: %d %s", rec.Code, rec.Body.String())
 	}
-	if rec := layoutReq(t, h, "POST", "/api/dashboards", `{"list":[`+cases["a card on a device"]+`]}`, token); rec.Code != http.StatusBadRequest {
+	if rec := layoutReq(t, h, "POST", "/api/dashboards", `{"list":[`+cases["an original on a device"]+`]}`, token); rec.Code != http.StatusBadRequest {
 		t.Errorf("a refused list through the route: %d, want 400", rec.Code)
 	}
 }

@@ -103,7 +103,11 @@ var All = []Card{
 		X: 9, Y: 10, W: 8, H: 4, Visible: true},
 	{ID: "card-network", Label: "Network", Room: "dhcp", Emits: "network", Page: "dhcp",
 		X: 9, Y: 14, W: 8, H: 6, Visible: true},
-	{ID: "dc-card-ping", Label: "Ping", X: 9, Y: 20, W: 8, H: 2, Visible: true},
+	// Ping's own room exists so a dashboard can watch it on a router it has not
+	// selected (docs/dashboards/PLAN.md). Its data is the Dashboard's: the
+	// collector has always fed `page-dashboard` and no other page, so the page
+	// that gates it is named as the Dashboard rather than left empty.
+	{ID: "dc-card-ping", Label: "Ping", Room: "ping", Page: "dashboard", X: 9, Y: 20, W: 8, H: 2, Visible: true},
 	{ID: "card-toptalkers", Label: "Top Talkers", X: 17, Y: 6, W: 8, H: 8, Visible: true},
 	{ID: "card-wireguard", Label: "WireGuard", Room: "vpn", Page: "vpn",
 		X: 17, Y: 14, W: 8, H: 8, Visible: true},

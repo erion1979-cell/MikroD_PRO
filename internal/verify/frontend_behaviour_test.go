@@ -254,8 +254,12 @@ func TestTrafficPickSurvivesReconnect(t *testing.T) {
 	// `resetTrafficOnReconnect` forgets the samples, `resetTraffic` forgets the
 	// samples AND the pick. A single reset wired to both events could not tell
 	// the two situations apart, which is how this was wrong before.
-	onReconnect := sliceBetween(t, traffic, "func"+"tion resetTrafficOnReconnect(): void {", "\n}")
-	full := sliceBetween(t, traffic, "func"+"tion resetTraffic(): void {", "\n}")
+	// Both live inside `createTrafficCard` since the card became one copy per
+	// device (docs/dashboards/PLAN.md), so each body ends at the factory's own
+	// indent: a bare "\n}" would now run on to the end of the factory and take
+	// in the other function.
+	onReconnect := sliceBetween(t, traffic, "func"+"tion resetTrafficOnReconnect(): void {", "\n  }")
+	full := sliceBetween(t, traffic, "func"+"tion resetTraffic(): void {", "\n  }")
 
 	clears := regexp.MustCompile(`userPickedIf\s*=\s*''`)
 	if clears.MatchString(onReconnect) {

@@ -284,6 +284,7 @@ export const CARD_ROOMS: Readonly<Record<string, string>> = {
   "card-connections": "connections",
   "dc-card-netflow": "wireless",
   "card-network": "dhcp",
+  "dc-card-ping": "ping",
   "card-wireguard": "vpn",
   "dc-card-physports": "interfaces",
   "dc-card-fwaction": "firewall",

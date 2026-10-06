@@ -79,7 +79,7 @@ import { initAbout } from './pages/about';
 import { mountSettingsTabs, populateSettings, initAiPromptControls } from './pages/settings';
 import { initDashboard, resetSysMeta, setConnRouter, setBwRouters, setBwActiveRouter, resetTraffic, resetPing, resetRoutingCards, resetBandwidthCard, resetLogsCard, switchSecScoreCard } from './pages/dashboard';
 import { initIpTip } from './iptip';
-import { initDashboardGrid } from './pages/dashboard-grid';
+import { initDashboardGrid, setDashboardRouters } from './pages/dashboard-grid';
 
 // The pages this bundle can render, and their header text - both from
 // `internal/pages` via cmd/pagesgen, so they cannot drift from the markup
@@ -451,7 +451,7 @@ async function main(): Promise<void> {
   initIpTip();
   // The Dashboard's card grid: layout, drag, resize and the Add panel. Returns
   // null when the dashboard markup is not present.
-  initDashboardGrid();
+  initDashboardGrid(socket);
   initKeyboard((page) => navigate(socket, page));
   // A module that must move the operator to another page (an approved assistant
   // action opening its result) asks here rather than importing showPage.
@@ -686,6 +686,7 @@ async function main(): Promise<void> {
   // does the same on every later change; this is the first load, where the
   // Bandwidth card would otherwise never learn the per-device capacity at all.
   setBwRouters(routers as never);
+  setDashboardRouters(routers);
 
   // ── The Devices page ────────────────────────────────────────────────────
   //
@@ -732,6 +733,7 @@ async function main(): Promise<void> {
     // The Bandwidth card's capacity figures, which are per device and come from
     // this list. Its own `routers:update` never fires on connect.
     setBwRouters(routers as never);
+    setDashboardRouters(routers);
     dropdown.refresh();
     // ── THE MOBILE SELECT'S OPTIONS ───────────────────────────────────────
     //

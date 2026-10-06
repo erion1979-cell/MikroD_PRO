@@ -16,7 +16,7 @@ const say = console.log.bind(console);
 const ROOT = process.env.MIKRODASH_ROOT || path.join(__dirname, '..', '..');
 const ENTRY = path.join(ROOT, 'testdata', '.dashboard-tabs-entry.ts');
 fs.writeFileSync(ENTRY,
-  "export { toGrid, fromGrid, newDashboardId, cleanName } from '../web/src/pages/dashboard-tabs.js';\n" +
+  "export { toGrid, fromGrid, copiesOf, newDashboardId, cleanName } from '../web/src/pages/dashboard-tabs.js';\n" +
   "export { DEFAULT_LAYOUT } from '../web/src/gen/grid-tables.js';\n");
 const OUT = path.join(ROOT, 'testdata', '.dashboard-tabs.cjs');
 execFileSync(path.join(ROOT, 'web', 'node_modules', '.bin', 'esbuild'),
@@ -25,29 +25,47 @@ execFileSync(path.join(ROOT, 'web', 'node_modules', '.bin', 'esbuild'),
 fs.rmSync(ENTRY, { force: true });
 const m = require(OUT);
 
-type Card = { uid: string; type: string; router: string; x: number; y: number; w: number; h: number };
+type Card = { uid: string; type: string; router: string; iface: string; x: number; y: number; w: number; h: number };
 type Grid = { id: string; x: number; y: number; w: number; h: number; visible: boolean };
 
 // ── A STORED DASHBOARD AS A LAYOUT, AND BACK ────────────────────────────────
+// Traffic is a device card: it becomes a copy, by uid. Power/UPS is not: it is
+// the one original, shown or hidden.
 const stored: Card[] = [
-  { uid: 'card-traffic', type: 'card-traffic', router: '', x: 1, y: 1, w: 12, h: 5 },
-  { uid: 'dc-card-power', type: 'dc-card-power', router: '', x: 13, y: 1, w: 12, h: 5 },
+  { uid: 'card-traffic-ab12', type: 'card-traffic', router: 'r-2', iface: 'ether1', x: 1, y: 1, w: 12, h: 5 },
+  { uid: 'dc-card-power', type: 'dc-card-power', router: '', iface: '', x: 13, y: 1, w: 12, h: 5 },
 ];
 const grid: Grid[] = m.toGrid(stored);
-assert.strictEqual(grid.length, m.DEFAULT_LAYOUT.length, 'every card type is in the layout, shown or not');
+assert.strictEqual(grid.length, m.DEFAULT_LAYOUT.length + 1,
+  'every original card type is in the layout, shown or not, plus one entry per copy');
 const shown = grid.filter((c) => c.visible).map((c) => c.id).sort();
-assert.deepStrictEqual(shown, ['card-traffic', 'dc-card-power'],
+assert.deepStrictEqual(shown, ['dash-i-card-traffic-ab12', 'dc-card-power'],
   'a dashboard shows only its own cards, though some types are visible by default: ' + shown);
+assert.ok(!grid.find((c) => c.id === 'card-traffic')!.visible,
+  'the original Traffic card shows on a named dashboard beside its copy');
 const power = grid.find((c) => c.id === 'dc-card-power')!;
 assert.deepStrictEqual([power.x, power.y, power.w, power.h], [13, 1, 12, 5], 'a card moved from where it was put');
-assert.deepStrictEqual(m.fromGrid(grid), stored, 'a layout does not turn back into the cards it came from');
+const specOf = (id: string) => (id === 'dash-i-card-traffic-ab12'
+  ? { uid: 'card-traffic-ab12', type: 'card-traffic', router: 'r-2', iface: 'ether1' } : undefined);
+const byUid = (l: Card[]) => [...l].sort((x, y) => x.uid.localeCompare(y.uid));
+assert.deepStrictEqual(byUid(m.fromGrid(grid, specOf)), byUid(stored),
+  'a layout does not turn back into the cards it came from');
+assert.deepStrictEqual(m.copiesOf(stored), [{ uid: 'card-traffic-ab12', type: 'card-traffic', router: 'r-2', iface: 'ether1' }],
+  'the copies a dashboard draws are not its device cards');
+
+// The original of a device card shown on a named dashboard (a duplicated first
+// dashboard, or a reset) is stored as a copy following the selected device.
+const dup = m.fromGrid([{ id: 'card-system', x: 1, y: 1, w: 8, h: 4, visible: true }]);
+assert.deepStrictEqual(dup, [{ uid: 'card-system', type: 'card-system', router: '', iface: '', x: 1, y: 1, w: 8, h: 4 }]);
+assert.ok(m.toGrid(dup).some((c: Grid) => c.id === 'dash-i-card-system' && c.visible),
+  'a stored device card did not come back as a copy');
 
 assert.strictEqual(m.toGrid([]).filter((c: Grid) => c.visible).length, 0, 'an empty dashboard shows cards');
 
 // Overlapping cards, as a hand-edited store could hold, are repaired rather
-// than drawn on top of each other.
+// than drawn on top of each other - a copy against an original included.
 const clash: Grid[] = m.toGrid([stored[0], { ...stored[1], x: 1 }]);
-const [a, b] = ['card-traffic', 'dc-card-power'].map((id) => clash.find((c) => c.id === id)!);
+const [a, b] = ['dash-i-card-traffic-ab12', 'dc-card-power'].map((id) => clash.find((c) => c.id === id)!);
 assert.ok(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y,
   'two stored cards on the same cells were drawn overlapping');
 

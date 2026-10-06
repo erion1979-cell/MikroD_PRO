@@ -24,7 +24,7 @@
 // Three states, not two: idle says nothing at all, a trickle says `<1%` rather
 // than rounding to `0%` and looking idle, and everything else rounds.
 
-import { el } from '../dom';
+import { pageScope, type CardScope } from './dashboard-card-scope';
 import { dcSplitRate } from './dashboard-cards-util';
 import type { TrafficSample } from '../gen/payloads';
 import type { RouterRecord } from '../events-hand';
@@ -58,13 +58,20 @@ function fmtPct(pct: number, mbps: number): string {
   return mbps > 0 ? (pct < 1 ? '<1%' : Math.round(pct) + '%') : '-';
 }
 
-export function renderBandwidthCard(sample: TrafficSample): void {
+/**
+ * The Bandwidth card drawing into `s` (see dashboard-card-scope.ts), against
+ * the link capacity of the router the sample is from.
+ */
+export function renderBandwidthInto(
+  s: CardScope, sample: TrafficSample, cap: { down: number; up: number },
+): void {
+  const bwDown = cap.down, bwUp = cap.up;
   const rxMbps = sample.rx_mbps || 0;
   const txMbps = sample.tx_mbps || 0;
 
   const rx = dcSplitRate(rxMbps), tx = dcSplitRate(txMbps);
-  const rxNum = el('dc-bwLiveRxNum'), rxUnit = el('dc-bwLiveRxUnit');
-  const txNum = el('dc-bwLiveTxNum'), txUnit = el('dc-bwLiveTxUnit');
+  const rxNum = s.q('dc-bwLiveRxNum'), rxUnit = s.q('dc-bwLiveRxUnit');
+  const txNum = s.q('dc-bwLiveTxNum'), txUnit = s.q('dc-bwLiveTxUnit');
   if (rxNum) rxNum.textContent = rx.num;
   if (rxUnit) rxUnit.textContent = rx.unit;
   if (txNum) txNum.textContent = tx.num;
@@ -76,16 +83,22 @@ export function renderBandwidthCard(sample: TrafficSample): void {
   const rxPct = Math.min(100, bwDown > 0 ? (rxMbps / bwDown) * 100 : 0);
   const txPct = Math.min(100, bwUp > 0 ? (txMbps / bwUp) * 100 : 0);
 
-  const barRx = el('dc-bwBarRx'), barTx = el('dc-bwBarTx');
+  const barRx = s.q('dc-bwBarRx'), barTx = s.q('dc-bwBarTx');
   // ONE decimal, as a string: the CSS transition interpolates between these, so
   // more precision would be movement nobody can see and less would step.
   if (barRx) barRx.style.height = rxPct.toFixed(1) + '%';
   if (barTx) barTx.style.height = txPct.toFixed(1) + '%';
 
-  const pctRxEl = el('dc-bwPctRx'), pctTxEl = el('dc-bwPctTx');
+  const pctRxEl = s.q('dc-bwPctRx'), pctTxEl = s.q('dc-bwPctTx');
   if (pctRxEl) pctRxEl.textContent = fmtPct(rxPct, rxMbps);
   if (pctTxEl) pctTxEl.textContent = fmtPct(txPct, txMbps);
 }
+
+/** The Dashboard's own copy, following the selected router. */
+export function renderBandwidthCard(sample: TrafficSample): void {
+  renderBandwidthInto(pageScope, sample, { down: bwDown, up: bwUp });
+}
+
 
 /** Forget the fleet. A switch re-syncs from the next `routers:update`. */
 /**
