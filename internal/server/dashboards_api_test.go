@@ -77,7 +77,18 @@ func TestDashboardsAreRefusedWhenMalformed(t *testing.T) {
 	for i := range many {
 		many[i] = dash(fmt.Sprintf("d%d", i), "D", "")
 	}
+	// Nine devices named by cards; nine cards following the selection are not.
+	devices, followers := make([]string, 9), make([]string, 9)
+	for i := range devices {
+		devices[i] = fmt.Sprintf(`{"uid":"c%d","type":"card-system","router":"r-%d","x":1,"y":%d,"w":1,"h":1}`, i, i, i+1)
+		followers[i] = fmt.Sprintf(`{"uid":"c%d","type":"card-system","router":"","x":1,"y":%d,"w":1,"h":1}`, i, i+1)
+	}
+	if _, msg := cleanDashboards(mustDashboards(t, `{"list":[`+dash("a", "x", strings.Join(devices[:8], ","))+
+		`,`+dash("b", "y", strings.Join(followers, ","))+`]}`)); msg != "" {
+		t.Errorf("8 devices, and 9 cards following the selection, were refused: %s", msg)
+	}
 	cases := map[string]string{
+		"9 devices":               dash("a", "x", strings.Join(devices, ",")),
 		"a malformed id":          dash("Head Office", "x", ""),
 		"a repeated id":           dash("a", "x", "") + "," + dash("a", "y", ""),
 		"no name":                 dash("a", "   ", ""),

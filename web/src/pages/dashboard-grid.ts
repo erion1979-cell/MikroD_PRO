@@ -141,7 +141,7 @@ export function initDashboardGrid(socket: Socket): GridEditor | null {
   let copyChanged = (): void => {};
   devices = createDeviceCards(socket, () => copyChanged());
   devices.setRouters(routersSeen);
-  const tabs = initDashboardTabs(editor, (fn) => { saver = fn; }, devices);
+  const tabs = initDashboardTabs(editor, (fn) => { saver = fn; }, devices, socket);
   copyChanged = tabs.copyChanged;
 
   void mergeLayoutFromServer().then((merged) => {

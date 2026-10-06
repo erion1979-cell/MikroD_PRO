@@ -19,13 +19,22 @@
 // each following the selected device or one of its own
 // (dashboard-device-cards.ts). Every other type is still the one element on
 // the page, following the selection. The first dashboard keeps the originals.
+//
+// ── HOW MANY DEVICES IT READS ───────────────────────────────────────────────
+//
+// Each device a dashboard shows keeps its collectors running while it is on
+// screen, so the strip says how many that is, and a dashboard may name at most
+// DASH_DEVICES_MAX of them (the selection, which is read anyway, aside).
 
 import { el, esc } from '../dom';
 import { DEFAULT_LAYOUT, type GridCard } from '../gen/grid-tables';
 import { mergeLayout, repairOverlaps } from './dashboard-grid-layout';
 import { applyLayout, loadLayout, saveLayout, syncDashRooms } from './dashboard-grid-store';
 import type { GridEditor } from './dashboard-grid-edit';
-import { COPY_PREFIX, DEVICE_CARDS, type CopySpec, type DeviceCards } from './dashboard-device-cards';
+import {
+  COPY_PREFIX, DASH_DEVICES_MAX, DEVICE_CARDS, fixedDevices, type CopySpec, type DeviceCards,
+} from './dashboard-device-cards';
+import type { Socket } from '../socket';
 
 /** One card on a dashboard after the first: DashboardCard in internal/server/dashboards_api.go. */
 export interface DashCard {
@@ -86,6 +95,19 @@ export function fromGrid(
   return out;
 }
 
+/**
+ * The devices a dashboard on screen reads: each card's own, or the selected
+ * one for a card that follows the selection.
+ */
+export function devicesRead(cards: readonly DashCard[], selected: string): string[] {
+  const out: string[] = [];
+  for (const c of cards) {
+    const r = c.router || selected;
+    if (r && !out.includes(r)) out.push(r);
+  }
+  return out;
+}
+
 /** A new dashboard id, unlike any in `taken`. */
 export function newDashboardId(taken: readonly string[], rnd: () => number = Math.random): string {
   for (;;) {
@@ -113,7 +135,7 @@ function remember(id: string): void {
  * grid asks before applying the first dashboard's server copy.
  */
 export function initDashboardTabs(
-  editor: GridEditor, setSaver: (fn: (l: GridCard[]) => void) => void, devices: DeviceCards,
+  editor: GridEditor, setSaver: (fn: (l: GridCard[]) => void) => void, devices: DeviceCards, socket: Socket,
 ): { mainShowing: () => boolean; copyChanged: () => void } {
   let data: Dashboards = { mainName: 'Overview', list: [] };
   let active = MAIN;
@@ -139,6 +161,18 @@ export function initDashboardTabs(
     if (del) del.disabled = active === MAIN;
   }
 
+  /** The count beside the tabs, and the devices it counts on hover. */
+  function drawCount(): void {
+    const pill = el('dashDevCount');
+    if (!pill) return;
+    const cards = fromGrid(editor.getLayout(), devices.spec);
+    const read = devicesRead(cards, socket.selectedRouter());
+    const fixed = fixedDevices(cards).length;
+    pill.textContent = read.length + (read.length === 1 ? ' device' : ' devices');
+    pill.title = (read.length ? 'Reads ' + read.map((r) => devices.label(r)).join(', ') : 'Reads no device') +
+      (active === MAIN ? '' : ' · ' + fixed + ' of at most ' + DASH_DEVICES_MAX + ' named by its cards');
+  }
+
   function show(id: string): void {
     if (editor.isEditing()) return;
     const target = id === MAIN ? null : data.list.find((d) => d.id === id);
@@ -161,9 +195,10 @@ export function initDashboardTabs(
         // editing.
         show(target.id);
       }
-      : saveLayout);
+      : (l) => { saveLayout(l); drawCount(); });
     remember(id);
     draw();
+    drawCount();
   }
 
   function add(name: string, cards: DashCard[]): void {
@@ -234,9 +269,12 @@ export function initDashboardTabs(
       if (sp) { c.router = sp.router; c.iface = sp.iface; }
     }
     persist();
+    drawCount();
   }
+  socket.on('router:switched', drawCount);
 
   draw();
+  drawCount();
   void fetch('/api/dashboards', { credentials: 'same-origin' })
     .then((r) => (r.ok ? r.json() : null))
     .then((j: { ok?: boolean; dashboards?: Dashboards } | null) => {

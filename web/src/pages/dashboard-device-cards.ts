@@ -36,6 +36,20 @@ export const DEVICE_CARDS: readonly string[] = [
   'card-system', 'card-traffic', 'dc-card-bw', 'dc-card-ping', 'dc-card-wanflow', 'dc-card-physports',
 ];
 
+/**
+ * How many devices one dashboard's cards may name (dashDevicesMax in
+ * internal/server/dashboards_api.go). Each keeps its collectors running while
+ * the dashboard is on screen; cards following the selection are not counted.
+ */
+export const DASH_DEVICES_MAX = 8;
+
+/** The devices these copies name, each once, in order. */
+export function fixedDevices(specs: Iterable<{ router: string }>): string[] {
+  const out: string[] = [];
+  for (const c of specs) if (c.router && !out.includes(c.router)) out.push(c.router);
+  return out;
+}
+
 /** A copy's element id: its uid, prefixed so it can never be an original's. */
 export const COPY_PREFIX = 'dash-i-';
 
@@ -88,6 +102,8 @@ export interface DeviceCards {
   /** A new copy of `type`, drawn and returned as a hidden grid card to place. */
   add(type: string, size: { w: number; h: number }): GridCard;
   setRouters(list: readonly DeviceRouter[]): void;
+  /** A device's name as the picker shows it. */
+  label(id: string): string;
 }
 
 /**
@@ -121,8 +137,15 @@ export function createDeviceCards(socket: Socket, changed: () => void): DeviceCa
     sel.className = 'dash-dev-pick';
     sel.title = 'Which device this card shows';
     const opts = ['<option value="">Selected device</option>'];
+    // A device no other copy names is one more for the dashboard to read,
+    // and refused once it reads as many as it may.
+    const others = fixedDevices([...copies.values()].filter((x) => x !== c));
+    const full = others.length >= DASH_DEVICES_MAX;
     for (const r of routers) {
-      if (r.id) opts.push('<option value="' + esc(r.id) + '">' + esc(routerLabel(r)) + '</option>');
+      if (!r.id) continue;
+      const off = full && !others.includes(r.id) && r.id !== c.router;
+      opts.push('<option value="' + esc(r.id) + '"' + (off ? ' disabled' : '') + '>' + esc(routerLabel(r)) +
+        (off ? ' (limit of ' + DASH_DEVICES_MAX + ' devices)' : '') + '</option>');
     }
     // A device since removed from the list still shows what is stored.
     if (c.router && !routers.some((r) => r.id === c.router)) {
@@ -133,10 +156,19 @@ export function createDeviceCards(socket: Socket, changed: () => void): DeviceCa
     sel.addEventListener('change', () => {
       const spec = { uid: c.uid, type: c.type, router: sel.value, iface: '' };
       replace(c, spec);
+      redrawPickers();
       changed();
       sendWatch();
     });
     return sel;
+  }
+
+  /** Every picker drawn again: the names, or which devices are left, changed. */
+  function redrawPickers(): void {
+    each((c) => {
+      const old = c.node.querySelector('.dash-dev-pick');
+      if (old) old.replaceWith(picker(c));
+    });
   }
 
   function build(spec: CopySpec): Copy | null {
@@ -293,11 +325,11 @@ export function createDeviceCards(socket: Socket, changed: () => void): DeviceCa
     },
     setRouters(list) {
       routers = list;
-      // Redraw every picker with the new names.
-      each((c) => {
-        const old = c.node.querySelector('.dash-dev-pick');
-        if (old) old.replaceWith(picker(c));
-      });
+      redrawPickers();
+    },
+    label(id) {
+      const r = routers.find((x) => x.id === id);
+      return r ? routerLabel(r) : id;
     },
   };
 }

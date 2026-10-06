@@ -80,11 +80,20 @@ func (cn *conn) setWatches(in []dashWatch) {
 	if len(in) > dashWatchMax {
 		in = in[:dashWatchMax]
 	}
+	// The devices a dashboard may name, plus the selection its other cards
+	// follow: the watches past that many devices are dropped, so a browser
+	// cannot run more routers' collectors than a saved dashboard could.
 	out := make([]dashWatch, 0, len(in))
+	routers := map[string]bool{}
 	for _, w := range in {
-		if w.Router != "" && dashWatchCards[w.Card] {
-			out = append(out, w)
+		if w.Router == "" || !dashWatchCards[w.Card] {
+			continue
 		}
+		if !routers[w.Router] && len(routers) == dashDevicesMax+1 {
+			continue
+		}
+		routers[w.Router] = true
+		out = append(out, w)
 	}
 	cn.watch.list = out
 	cn.applyWatches()

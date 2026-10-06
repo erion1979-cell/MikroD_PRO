@@ -37,6 +37,12 @@ const (
 	dashboardNameMax  = 40
 	dashboardRowsMax  = 500
 	dashboardHMax     = 100
+	// dashDevicesMax is how many devices one dashboard's cards may name
+	// (docs/dashboards/PLAN.md, phase 3). Each one keeps its collectors
+	// running while the dashboard is on screen, and the cost lands on the
+	// routers, so it is bounded here rather than left to the browser. Cards
+	// following the selected device are not counted: that one is read anyway.
+	dashDevicesMax = 8
 )
 
 var (
@@ -155,7 +161,7 @@ func cleanDashboards(in Dashboards) (Dashboards, string) {
 			return out, "at most 100 cards on one dashboard"
 		}
 		cd := Dashboard{ID: d.ID, Name: name, Cards: []DashboardCard{}}
-		uids := map[string]bool{}
+		uids, devices := map[string]bool{}, map[string]bool{}
 		for _, c := range d.Cards {
 			if !dashCardUIDRe.MatchString(c.UID) || uids[c.UID] {
 				return out, "a card id is missing, malformed or repeated"
@@ -166,6 +172,11 @@ func cleanDashboards(in Dashboards) (Dashboards, string) {
 			}
 			if c.Router != "" && (!dashWatchCards[c.Type] || !dashRouterIDRe.MatchString(c.Router)) {
 				return out, "only a device card may name a device, and by its id"
+			}
+			if c.Router != "" {
+				if devices[c.Router] = true; len(devices) > dashDevicesMax {
+					return out, "at most 8 devices on one dashboard"
+				}
 			}
 			if c.Iface != "" {
 				if _, ok := dashboardName(c.Iface, ""); !ok || c.Type != "card-traffic" ||

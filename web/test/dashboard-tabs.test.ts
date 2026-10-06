@@ -5,6 +5,8 @@
  *   put and hides every other type, and turns back into the same cards.
  * - New ids never collide, and names are refused the way the server refuses
  *   them.
+ * - A dashboard counts each device it reads once, the selection standing in
+ *   for cards that follow it, and its device limit is the server's.
  */
 
 import fs from 'node:fs';
@@ -16,7 +18,8 @@ const say = console.log.bind(console);
 const ROOT = process.env.MIKRODASH_ROOT || path.join(__dirname, '..', '..');
 const ENTRY = path.join(ROOT, 'testdata', '.dashboard-tabs-entry.ts');
 fs.writeFileSync(ENTRY,
-  "export { toGrid, fromGrid, copiesOf, newDashboardId, cleanName } from '../web/src/pages/dashboard-tabs.js';\n" +
+  "export { toGrid, fromGrid, copiesOf, newDashboardId, cleanName, devicesRead } from '../web/src/pages/dashboard-tabs.js';\n" +
+  "export { fixedDevices, DASH_DEVICES_MAX } from '../web/src/pages/dashboard-device-cards.js';\n" +
   "export { DEFAULT_LAYOUT } from '../web/src/gen/grid-tables.js';\n");
 const OUT = path.join(ROOT, 'testdata', '.dashboard-tabs.cjs');
 execFileSync(path.join(ROOT, 'web', 'node_modules', '.bin', 'esbuild'),
@@ -79,5 +82,26 @@ for (const bad of ['', '   ', null, 'x'.repeat(41), 'a\u0007b']) {
   assert.strictEqual(m.cleanName(bad), null, 'accepted the name ' + JSON.stringify(bad));
 }
 
+
+// ── THE DEVICES A DASHBOARD READS ───────────────────────────────────────────
+const at = { iface: '', x: 1, y: 1, w: 4, h: 4 };
+const reads: Card[] = [
+  { uid: 'a', type: 'card-system', router: 'r-2', ...at },
+  { uid: 'b', type: 'dc-card-ping', router: 'r-2', ...at },
+  { uid: 'c', type: 'card-system', router: '', ...at },
+  { uid: 'dc-card-power', type: 'dc-card-power', router: '', ...at },
+  { uid: 'd', type: 'card-system', router: 'r-3', ...at },
+];
+assert.deepStrictEqual(m.devicesRead(reads, 'r-1'), ['r-2', 'r-1', 'r-3'],
+  'each device once, the selection for the cards that follow it');
+assert.deepStrictEqual(m.devicesRead(reads, 'r-2'), ['r-2', 'r-3'], 'the selection counted twice');
+assert.deepStrictEqual(m.devicesRead([], 'r-1'), [], 'an empty dashboard reads a device');
+assert.deepStrictEqual(m.fixedDevices(reads), ['r-2', 'r-3'], 'the selection counted against the limit');
+const goMax = /dashDevicesMax\s*=\s*(\d+)/.exec(
+  fs.readFileSync(path.join(ROOT, 'internal', 'server', 'dashboards_api.go'), 'utf8'));
+assert.ok(goMax, 'dashDevicesMax not found in dashboards_api.go');
+assert.strictEqual(m.DASH_DEVICES_MAX, Number(goMax![1]), 'the browser and the server disagree on the device limit');
+say('ok - a dashboard counts the devices it reads, under the server\'s limit');
+
 fs.rmSync(OUT, { force: true });
-say('# dashboard-tabs: layouts round-trip, ids are unique, names are checked');
+say('# dashboard-tabs: layouts round-trip, ids are unique, names are checked, devices are counted');

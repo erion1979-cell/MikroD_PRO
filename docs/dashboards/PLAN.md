@@ -45,7 +45,13 @@ yet converted, which can appear once per dashboard and follow the selected devic
    drawn by the same code (`dashboard-device-cards.ts`); the Dashboard's own copy is one of them. A
    Traffic copy's backlog comes on `dash:traffic-history`, which the original chart never adopts.
    The other card types follow in groups.
-3. **Load.** Each extra device on screen keeps its collectors running while the dashboard is open.
-   A dashboard shows how many devices it reads, and the number of fixed devices is capped.
+3. **Load.** **Done.** Each extra device on screen keeps its collectors running while the dashboard
+   is open, so the tab strip shows how many devices the dashboard on screen reads (a blue pill,
+   naming them on hover). A dashboard's cards may name at most 8 devices (`dashDevicesMax`, with
+   `DASH_DEVICES_MAX` in the browser held to it by `web/test/dashboard-tabs.test.ts`); cards following
+   the selection do not count, since that device is read anyway. The server refuses a ninth when
+   saving, and a `dash:watch` set reads at most those 8 plus the selection, so no browser can run more
+   routers' collectors than a saved dashboard could. In a card's device picker the devices past the
+   limit are disabled.
 4. **Sharing** (later): an administrator publishes a dashboard; each viewer still sees only the
    devices and pages their role allows.

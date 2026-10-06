@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"sort"
 	"testing"
 )
@@ -93,6 +94,29 @@ func TestAWatchSetIsBounded(t *testing.T) {
 	cn.setWatches(many)
 	if len(cn.watch.list) != dashWatchMax {
 		t.Errorf("kept %d watches, want at most %d", len(cn.watch.list), dashWatchMax)
+	}
+}
+
+// A WATCH SET READS AT MOST THE DEVICES A DASHBOARD MAY NAME, plus the
+// selection: a browser cannot run more routers' collectors than a saved
+// dashboard could. Further cards on a device already counted are kept.
+func TestAWatchSetReadsABoundedNumberOfDevices(t *testing.T) {
+	cn, _, _ := peekConn(watchViewer())
+	var in []dashWatch
+	for i := 0; i < dashDevicesMax+3; i++ {
+		in = append(in, dashWatch{Router: fmt.Sprintf("r%d", i), Card: "card-system"})
+	}
+	in = append(in, dashWatch{Router: "r0", Card: "dc-card-ping"})
+	cn.setWatches(in)
+	routers := map[string]bool{}
+	for _, w := range cn.watch.list {
+		routers[w.Router] = true
+	}
+	if len(routers) != dashDevicesMax+1 || routers[fmt.Sprintf("r%d", dashDevicesMax+1)] {
+		t.Errorf("watching %d devices %v, want the first %d", len(routers), routers, dashDevicesMax+1)
+	}
+	if last := cn.watch.list[len(cn.watch.list)-1]; last.Router != "r0" || last.Card != "dc-card-ping" {
+		t.Errorf("a second card on a counted device was dropped: %+v", last)
 	}
 }
 
