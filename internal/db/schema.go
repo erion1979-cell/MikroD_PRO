@@ -23,7 +23,7 @@ import (
 // Stamping anything lower would make `Open` refuse the database it had just
 // written; stamping higher than the migrations listed would claim ones that
 // never ran.
-const schemaVersion = 35
+const schemaVersion = 36
 
 // portMigrations are the schema steps this port owns, keyed by the version they
 // take a database TO.
@@ -301,6 +301,27 @@ var portMigrations = map[int][]string{
 	// 35: the Power/UPS module's units, minute history and events. See
 	// power_schema.go.
 	35: {powerTablesDDL},
+	// 36: `user_layouts` takes a fourth kind, `dashboards`: a user's named
+	// dashboards beyond the first (docs/dashboards/PLAN.md).
+	//
+	// ── A REBUILD THAT KEEPS EVERY ROW ──────────────────────────────────────
+	//
+	// The kinds are a CHECK, and SQLite cannot alter one, so the table is
+	// rebuilt: create the new shape, copy every row, drop the old, rename. The
+	// rows are operators' saved layouts, so unlike 32 nothing is dropped. All
+	// four statements run in the one transaction the runner opens per version,
+	// so a failure part-way leaves the old table as it was.
+	//
+	// SAFE TO RUN TWICE, as the rule at the top asks: over a database already
+	// in the new shape the copy moves the same columns between two tables of
+	// the same shape, and the swap ends where it started.
+	36: {
+		`CREATE TABLE IF NOT EXISTS user_layouts_v36 (` + userLayoutsColumns + `)`,
+		`INSERT OR IGNORE INTO user_layouts_v36 (user_id, kind, data, updated_at)
+		   SELECT user_id, kind, data, updated_at FROM user_layouts`,
+		`DROP TABLE user_layouts`,
+		`ALTER TABLE user_layouts_v36 RENAME TO user_layouts`,
+	},
 }
 
 // createSchema builds a new database at `path`.

@@ -17,6 +17,17 @@ import (
 // unsuffixed `dashboard-layout.json`, which is why the value is not arbitrary.
 const SharedLayoutUser = "_shared"
 
+// userLayoutsColumns is the `user_layouts` table's body, shared by the fresh
+// schema and migration 36 so the two cannot describe different tables.
+// `dashboards` (36) holds a user's named dashboards beyond the first.
+const userLayoutsColumns = `
+          user_id    TEXT NOT NULL,
+          kind       TEXT NOT NULL CHECK (kind IN ('dashboard','topology','nav','dashboards')),
+          data       TEXT NOT NULL,
+          updated_at INTEGER NOT NULL,
+          PRIMARY KEY (user_id, kind)
+        `
+
 // LayoutUser is `_layoutUser(req)`: the signed-in user, or the shared identity.
 func LayoutUser(userID string) string {
 	if userID == "" {

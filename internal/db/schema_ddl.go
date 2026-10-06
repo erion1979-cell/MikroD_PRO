@@ -232,13 +232,7 @@ CREATE TABLE router_docs (
           PRIMARY KEY (router_id, kind)
         );
 
-CREATE TABLE "user_layouts" (
-          user_id    TEXT NOT NULL,
-          kind       TEXT NOT NULL CHECK (kind IN ('dashboard','topology','nav')),
-          data       TEXT NOT NULL,
-          updated_at INTEGER NOT NULL,
-          PRIMARY KEY (user_id, kind)
-        );
+CREATE TABLE "user_layouts" (` + userLayoutsColumns + `);
 
 CREATE TABLE user_notify_config (
           user_id    TEXT PRIMARY KEY,

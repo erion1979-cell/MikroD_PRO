@@ -633,6 +633,7 @@ func (s *Server) Handler() http.Handler {
 	s.registerLocalCC(mux)
 	s.registerCities(mux)
 	s.registerLayouts(mux)
+	s.registerDashboards(mux)
 	s.registerRouterDocs(mux)
 	s.registerDNSFleet(mux)
 	s.registerTopologyFleet(mux)

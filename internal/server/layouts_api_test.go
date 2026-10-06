@@ -244,7 +244,7 @@ CREATE TABLE schema_version (version INTEGER PRIMARY KEY, applied_at INTEGER NOT
 INSERT INTO schema_version (version, applied_at) VALUES (14, 0);
 CREATE TABLE user_layouts (
   user_id    TEXT NOT NULL,
-  kind       TEXT NOT NULL CHECK (kind IN ('dashboard','topology','nav')),
+  kind       TEXT NOT NULL CHECK (kind IN ('dashboard','topology','nav','dashboards')),
   data       TEXT NOT NULL,
   updated_at INTEGER NOT NULL,
   PRIMARY KEY (user_id, kind)
