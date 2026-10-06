@@ -1185,8 +1185,8 @@
     .app-dialog-bg{z-index:1100}
     .rtr-modal.app-dialog{width:min(420px,92vw)}
     .app-dialog .rtr-modal-body{display:block;padding:1rem 1.1rem}
-    .app-dialog .sform-label{display:block;margin-bottom:.35rem}
-    .app-dialog-msg{margin:0;font-size:.85rem;line-height:1.5;color:var(--text-main)}
+    .app-dialog-msg{margin:0;font-size:.85rem;line-height:1.5;color:var(--text-main);white-space:pre-line;overflow-wrap:anywhere}
+    .app-dialog-q{display:block;margin-bottom:.5rem}
     .rtr-modal{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;width:min(960px,94vw);max-height:90vh;overflow-y:auto;box-shadow:0 16px 40px rgba(0,0,0,.5)}
     .rtr-modal-hdr{padding:.9rem 1.1rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
     .rtr-modal-title{font-size:.82rem;font-weight:700;color:var(--text-main);text-transform:uppercase;letter-spacing:.06em}

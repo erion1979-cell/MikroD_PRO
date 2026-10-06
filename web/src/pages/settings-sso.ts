@@ -23,6 +23,7 @@
 
 import { el, esc, modalTabs } from '../dom';
 import type { RoleView } from './settings';
+import { askConfirm } from '../dialog';
 
 interface ProviderView {
   id: string;
@@ -283,10 +284,10 @@ async function remove(id: string): Promise<void> {
   // says so: they stay with their grants and simply have no way to sign in. An
   // operator expecting a cascade would otherwise leave accounts behind without
   // knowing it.
-  if (!window.confirm('Delete "' + (p?.name || id) + '"?\n\n'
+  if (!(await askConfirm('Delete "' + (p?.name || id) + '"?\n\n'
     + 'Anyone signing in through it loses that way in. The accounts it created '
     + 'remain, with their access - remove them on the Users tab if that is what '
-    + 'you want.')) return;
+    + 'you want.', { title: 'Delete sign-in provider', okLabel: 'Delete', danger: true }))) return;
   const r = await fetch('/api/sso/providers/' + encodeURIComponent(id),
     { method: 'DELETE', credentials: 'same-origin' });
   if (r.ok) await loadSSOProviders();

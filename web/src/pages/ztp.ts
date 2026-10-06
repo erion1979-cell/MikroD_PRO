@@ -18,6 +18,7 @@ import { openWizard, type WizardStep } from '../wizard';
 import { newSecret } from './config-management-deploy';
 import type { VarDef } from './config-management-editor';
 import * as V from './ztp-views';
+import { askConfirm } from '../dialog';
 
 async function api<T>(method: string, path: string, body?: unknown): Promise<T> {
   const r = await fetch(path, {
@@ -311,19 +312,21 @@ async function act(action: string, d: ZTPDeviceView): Promise<void> {
         openOnboard(d);
         return;
       case 'reject':
-        if (!confirm('Reject ' + name + '?\n\nIts tunnel is closed and it can no longer reach this MikroDash.')) return;
+        if (!(await askConfirm('Reject ' + name + '?\n\nIts tunnel is closed and it can no longer reach this MikroDash.',
+          { title: 'Reject device', okLabel: 'Reject', danger: true }))) return;
         await api('POST', base + '/reject');
         return;
       case 'retry':
         await api('POST', base + '/retry');
         return;
       case 'delete':
-        if (!confirm('Remove ' + name + ' from provisioning?' + (d.state === 'awaiting'
-          ? '\n\nIts script stops working.' : ''))) return;
+        if (!(await askConfirm('Remove ' + name + ' from provisioning?' + (d.state === 'awaiting'
+          ? '\n\nIts script stops working.' : ''), { title: 'Remove device', okLabel: 'Remove', danger: true }))) return;
         await api('DELETE', base);
         return;
       case 'regenerate': {
-        if (!confirm('Make a new script for ' + name + '?\n\nThe old one stops working.')) return;
+        if (!(await askConfirm('Make a new script for ' + name + '?\n\nThe old one stops working.',
+          { title: 'New script', okLabel: 'Make new script' }))) return;
         const r = await api<V.ScriptResult>('POST', base + '/regenerate', {});
         showScript('New script for ' + name, r, 'Run it on ' + name + '.');
         return;
@@ -366,11 +369,11 @@ function mountSettings(): void {
         'to be onboarded.');
     }, (e) => { if (msg) msg.textContent = errText(e); });
   });
-  el('ztpBatchBody')?.addEventListener('click', (e) => {
+  el('ztpBatchBody')?.addEventListener('click', async (e) => {
     const b = (e.target as HTMLElement).closest?.('[data-ztp-revoke]') as HTMLElement | null;
     if (!b) return;
-    if (!confirm('Revoke this generic script?\n\nRouters that have not called home yet can no longer use it. ' +
-      'Devices it already brought in are not affected.')) return;
+    if (!(await askConfirm('Revoke this generic script?\n\nRouters that have not called home yet can no longer use it. ' +
+      'Devices it already brought in are not affected.', { title: 'Revoke script', okLabel: 'Revoke', danger: true }))) return;
     void api('POST', '/api/ztp/batches/' + encodeURIComponent(b.dataset.ztpRevoke ?? '') + '/revoke')
       .catch((err) => { const m = el('ztpBatchMsg'); if (m) m.textContent = errText(err); });
   });

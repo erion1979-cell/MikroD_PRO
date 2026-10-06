@@ -219,7 +219,9 @@ const doc = makeDoc(['cfgTabs', 'cfgBadge', 'cfgStats', 'cfgCats', 'cfgSearch', 
   'cpApply', 'cpLinksError'],
   { allowUnknown: ['#cfgTabs [data-cfgtab]', '#cpPolicies [data-cp-policy]'] });
 global.document = doc;
-global.window = { addEventListener: () => {}, setTimeout, clearTimeout, alert: () => {} };
+global.window = { addEventListener: () => {}, setTimeout, clearTimeout };
+// The app asks in its own dialog (src/dialog.ts); tests answer through this.
+global.mikrodashTestDialogs = { alert: () => {} };
 const fetched = [];
 global.fetch = async (url) => {
   fetched.push(url);

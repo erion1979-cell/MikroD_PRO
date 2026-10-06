@@ -27,6 +27,7 @@ import { esc, el, lsGet, lsSet } from '../dom';
 import { openResource, registerExtra } from '../resource';
 import type { Socket } from '../socket';
 import type { RouterRecord } from '../events-hand';
+import { askConfirm } from '../dialog';
 
 /** One record as the fleet endpoint reports it. */
 interface FleetEntry {
@@ -454,14 +455,14 @@ export function initDnsFleet(socket: Socket, isVisible: (page: string) => boolea
   });
 
   el('dnsFleetReload')?.addEventListener('click', load);
-  el('dnsFleetSyncAll')?.addEventListener('click', () => {
+  el('dnsFleetSyncAll')?.addEventListener('click', async () => {
     // EVERY MISSING PAIR, IN ONE REQUEST PER RECORD. The server is idempotent -
     // a record already present answers `already-present` rather than adding a
     // second - so a second press is safe.
     const work = rows.filter((r) => r.missing.length);
     if (!work.length) return;
-    if (!window.confirm('Copy ' + work.length + ' record' + (work.length === 1 ? '' : 's') +
-      ' to every router that is missing it?')) return;
+    if (!(await askConfirm('Copy ' + work.length + ' record' + (work.length === 1 ? '' : 's') +
+      ' to every router that is missing it?', { title: 'Copy DNS records', okLabel: 'Copy' }))) return;
     let left = work.length;
     work.forEach((row) => {
       const from = Object.values(row.on)[0];

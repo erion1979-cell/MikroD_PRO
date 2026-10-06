@@ -218,19 +218,19 @@ export function initDashboardTabs(
   // dialog is open (a tab click behind it is not possible, a socket update is).
   const full = (): boolean => data.list.length + 1 >= 20;
   const atMost = (): Promise<void> =>
-    tell({ title: 'Dashboards', message: 'There can be at most 20 dashboards. Delete one to make room.' });
+    tell('There can be at most 20 dashboards. Delete one to make room.', { title: 'Dashboards' });
   const nameOf = (): string => (active === MAIN ? data.mainName : data.list.find((d) => d.id === active)?.name || '');
   el('dashTabNew')?.addEventListener('click', async () => {
     if (editor.isEditing()) return;
     if (full()) { await atMost(); return; }
-    const name = cleanName(await askText({ title: 'New dashboard', label: 'Name', okLabel: 'Create', maxLength: 40 }));
+    const name = cleanName(await askText('Name', { title: 'New dashboard', okLabel: 'Create', maxLength: 40 }));
     // A new dashboard starts empty: Edit, then Add card.
     if (name) add(name, []);
   });
   el('dashTabRename')?.addEventListener('click', async () => {
     if (editor.isEditing()) return;
     const was = active;
-    const name = cleanName(await askText({ title: 'Rename dashboard', label: 'Name', value: nameOf(), okLabel: 'Rename', maxLength: 40 }));
+    const name = cleanName(await askText('Name', { title: 'Rename dashboard', value: nameOf(), okLabel: 'Rename', maxLength: 40 }));
     if (!name) return;
     if (was === MAIN) data.mainName = name;
     else { const d = data.list.find((x) => x.id === was); if (d) d.name = name; }
@@ -241,18 +241,16 @@ export function initDashboardTabs(
     if (editor.isEditing()) return;
     if (full()) { await atMost(); return; }
     const cards = fromGrid(editor.getLayout(), devices.spec);
-    const name = cleanName(await askText({
-      title: 'Duplicate dashboard', label: 'Name of the copy', value: (nameOf() + ' (copy)').slice(0, 40),
-      okLabel: 'Duplicate', maxLength: 40,
+    const name = cleanName(await askText('Name of the copy', {
+      title: 'Duplicate dashboard', value: (nameOf() + ' (copy)').slice(0, 40), okLabel: 'Duplicate', maxLength: 40,
     }));
     if (name) add(name, cards);
   });
   el('dashTabDelete')?.addEventListener('click', async () => {
     if (editor.isEditing()) return;
     const d = data.list.find((x) => x.id === active);
-    if (!d || !(await askConfirm({
-      title: 'Delete dashboard', message: 'Delete the dashboard "' + d.name + '"? Its layout cannot be recovered.',
-      okLabel: 'Delete', danger: true,
+    if (!d || !(await askConfirm('Delete the dashboard "' + d.name + '"? Its layout cannot be recovered.', {
+      title: 'Delete dashboard', okLabel: 'Delete', danger: true,
     }))) return;
     data.list = data.list.filter((x) => x !== d);
     persist();

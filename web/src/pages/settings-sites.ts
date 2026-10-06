@@ -20,6 +20,7 @@
 
 import { el } from '../dom';
 import { mountCityPicker, type City, type CityPickerState } from './city-picker';
+import { askConfirm } from '../dialog';
 import {
   siteTableHtml, siteRouterCounts, siteMemberRowsHtml, siteSavePlan, siteDeletePrompt,
   type SiteView, type SiteMemberDevice,
@@ -225,7 +226,7 @@ async function save(): Promise<void> {
 }
 
 async function remove(id: string, name: string, count: number): Promise<void> {
-  if (!window.confirm(siteDeletePrompt(name, count))) return;
+  if (!(await askConfirm(siteDeletePrompt(name, count), { title: 'Delete site', okLabel: 'Delete', danger: true }))) return;
   try {
     await fetch('/api/sites/' + encodeURIComponent(id), {
       method: 'DELETE', credentials: 'same-origin',

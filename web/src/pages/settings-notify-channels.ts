@@ -18,6 +18,7 @@
  */
 
 import { el, esc, modalTabs } from '../dom';
+import { askConfirm } from '../dialog';
 
 interface ChannelView {
   id: string;
@@ -624,7 +625,8 @@ async function test(id: string, btn?: HTMLButtonElement): Promise<void> {
 }
 
 async function remove(c: ChannelView): Promise<void> {
-  if (!window.confirm('Delete the channel "' + c.name + '"?')) return;
+  if (!(await askConfirm('Delete the channel "' + c.name + '"?',
+    { title: 'Delete channel', okLabel: 'Delete', danger: true }))) return;
   try {
     await fetch('/api/notify-channels/' + encodeURIComponent(c.id),
       { method: 'DELETE', credentials: 'same-origin' });

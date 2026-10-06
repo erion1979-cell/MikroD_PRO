@@ -36,6 +36,7 @@ import {
 import { sitesById } from './settings-sites';
 import { initSSOCard, loadSSOProviders } from './settings-sso';
 import { presetTiers } from '../presets';
+import { askConfirm, tell } from '../dialog';
 import {
   userSavePlan, userSaveOutcome, groupSavePlan, groupSaveOutcome,
   roleSavePlan, roleSaveOutcome, groupMembersHtml, rolePagesFrom,
@@ -578,18 +579,18 @@ function wireForms(): void {
     });
   });
 
-  el('userTbody')?.addEventListener('click', (e) => {
+  el('userTbody')?.addEventListener('click', async (e) => {
     const btn = (e.target as HTMLElement | null)?.closest?.('[data-action]') as HTMLElement | null;
     if (!btn) return;
     const id = btn.closest('[data-user-id]')?.getAttribute('data-user-id') || '';
     const user = usersCache.find((u) => u.id === id);
     if (!user) return;
     if (btn.getAttribute('data-action') === 'edit') { showUserForm(user); return; }
-    if (!confirm(userDeletePrompt(user.username))) return;
+    if (!(await askConfirm(userDeletePrompt(user.username), { title: 'Delete user', okLabel: 'Delete', danger: true }))) return;
     void remove('/api/users/' + encodeURIComponent(id), loadUsers);
   });
 
-  el('groupTbody')?.addEventListener('click', (e) => {
+  el('groupTbody')?.addEventListener('click', async (e) => {
     const btn = (e.target as HTMLElement | null)
       ?.closest?.('[data-group-action]') as HTMLElement | null;
     if (!btn) return;
@@ -597,11 +598,11 @@ function wireForms(): void {
     const group = groupsCache.find((g) => g.id === id);
     if (!group) return;
     if (btn.getAttribute('data-group-action') === 'edit') { showGroupForm(group); return; }
-    if (!confirm(groupDeletePrompt(group.name))) return;
+    if (!(await askConfirm(groupDeletePrompt(group.name), { title: 'Delete group', okLabel: 'Delete', danger: true }))) return;
     void remove('/api/groups/' + encodeURIComponent(id), loadGroups);
   });
 
-  el('roleTbody')?.addEventListener('click', (e) => {
+  el('roleTbody')?.addEventListener('click', async (e) => {
     const t = e.target as HTMLElement | null;
     const edit = t?.closest?.('[data-role-edit]') as HTMLElement | null;
     if (edit) {
@@ -613,7 +614,7 @@ function wireForms(): void {
     if (!del) return;
     const id = del.getAttribute('data-role-del') || '';
     const role = roles.find((r) => r.id === id);
-    if (!confirm(roleDeletePrompt(role ? role.name : id))) return;
+    if (!(await askConfirm(roleDeletePrompt(role ? role.name : id), { title: 'Delete role', okLabel: 'Delete', danger: true }))) return;
     void remove('/api/roles/' + encodeURIComponent(id), loadRoles);
   });
 }
@@ -634,9 +635,9 @@ async function remove(url: string, reload: () => Promise<void>): Promise<void> {
   try {
     const r = await fetch(url, { method: 'DELETE', credentials: 'same-origin' });
     const j = await r.json().catch(() => null);
-    if (!j || !j.ok) alert((j && j.error) || 'Delete failed');
+    if (!j || !j.ok) await tell((j && j.error) || 'Delete failed', { title: 'Not deleted' });
   } catch {
-    alert('Request failed');
+    await tell('Request failed', { title: 'Not deleted' });
   }
   await reload();
 }

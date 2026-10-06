@@ -41,6 +41,7 @@ import { esc, el, renderSortHeader, sortMul, resRow, type SortCol, type SortStat
 import { mountAdds, mountRows } from '../resource';
 import type { Socket } from '../socket';
 import type { RosUsersPayload } from '../gen/payloads';
+import { askConfirm } from '../dialog';
 
 // A KEYLESS COLUMN IS NOT SORTABLE - see renderSortHeader. The action column is
 // the only one here that must never be.
@@ -333,15 +334,16 @@ export function initRosUsersPage(socket: Socket, isVisible: (page: string) => bo
 
   // ── Ending a session ──────────────────────────────────────────────────────
 
-  document.addEventListener('click', (e) => {
+  document.addEventListener('click', async (e) => {
     const b = (e.target as HTMLElement | null)?.closest?.('.ru-act');
     if (!b) return;
     const act = b.getAttribute('data-act') || '';
     const id = b.getAttribute('data-id') || '';
     const name = b.getAttribute('data-name') || '';
     if (act !== 'session-remove') return;
-    if (!window.confirm('End "' + name +
-        '"\u2019s session?\n\nThey will be disconnected from the router immediately.')) return;
+    if (!(await askConfirm('End "' + name +
+        '"\u2019s session?\n\nThey will be disconnected from the router immediately.',
+      { title: 'End session', okLabel: 'End session', danger: true }))) return;
     busy = busyKey(act, id);
     render();
     socket.emit('rossession:remove', { id, expectedName: name });

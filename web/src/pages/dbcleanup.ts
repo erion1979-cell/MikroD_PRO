@@ -37,6 +37,7 @@
 
 import { fmtDate } from '../timefmt';
 import { el, esc, fmtBytes } from '../dom';
+import { askConfirm } from '../dialog';
 
 export interface DbRouter { id: string; label?: string | null; host?: string | null }
 export interface DbRouterRows { routerId: string; rows: number }
@@ -354,10 +355,11 @@ export function initDbCleanup(): void {
       });
   });
 
-  n.delBtn.addEventListener('click', () => {
+  n.delBtn.addEventListener('click', async () => {
     const opts = currentOpts();
     if (!opts.types.length) return;
-    if (!confirm('Delete this data permanently? This cannot be undone.')) return;
+    if (!(await askConfirm('Delete this data permanently? This cannot be undone.',
+      { title: 'Delete data', okLabel: 'Delete', danger: true }))) return;
     const count = pendingCount;
     pendingCount = 0; // the preview is spent either way
     setBusy(

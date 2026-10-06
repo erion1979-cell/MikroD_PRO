@@ -45,6 +45,7 @@
 import { esc, el, lsGet, lsSet, svgEl, attr, text } from '../dom';
 import type { Socket } from '../socket';
 import type { WifiPayload, WirelessPayload, WirelessClient } from '../gen/payloads';
+import { askText } from '../dialog';
 
 // ── the stored document ─────────────────────────────────────────────────────
 //
@@ -1083,14 +1084,19 @@ export function initWifiMapPage(socket: Socket, isVisible: (page: string) => boo
         svg!.classList.remove('wm-placing');
         // A ZERO-LENGTH MEASUREMENT IS A MISCLICK, not a scale of infinity.
         if (units < 2) { render(); return; }
-        const said = window.prompt('How many metres is that?', '');
-        const metres = parseFloat(said || '');
-        if (Number.isFinite(metres) && metres > 0) {
-          doc.metresPerUnit = metres / units;
-          dirty = true;
-        }
-        syncChrome();
+        // Asked in the app's dialog, which does not block: the scale lands on
+        // the plan that was measured, and only if it is still the one open.
+        const measured = doc;
         render();
+        void askText('How many metres is that?', { title: 'Set the scale', okLabel: 'Set' }).then((said) => {
+          const metres = parseFloat(said || '');
+          if (measured === doc && Number.isFinite(metres) && metres > 0) {
+            doc.metresPerUnit = metres / units;
+            dirty = true;
+          }
+          syncChrome();
+          render();
+        });
         return;
       }
 

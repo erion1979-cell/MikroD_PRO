@@ -6,16 +6,17 @@
 // built around that: pending changes lead, every one has an Undo, and the reboot
 // is a separate button.
 //
-// THE TYPED CONFIRMATION IS THE LIVE APP'S, NOT AN ADDITION. `window.prompt`
-// asking for the router name back is what the live page does, and it is
-// reproduced exactly - cancel behaviour included, since a null return is
-// silent. It is what makes "the wrong router" a hard mistake rather than an easy
-// one.
+// THE TYPED CONFIRMATION IS THE LIVE APP'S, NOT AN ADDITION. Asking for the
+// router name back is what the live page does, and it is kept - cancel
+// behaviour included, since a cancel is silent - now in the app's own dialog
+// (dialog.ts) rather than `window.prompt`. It is what makes "the wrong router" a
+// hard mistake rather than an easy one.
 
 import { esc, el, renderSortHeader, sortMul, debounce, fmtBytes, type SortCol, type SortState, kv } from '../dom';
 import type { Socket } from '../socket';
 import type { Package, Firmware, Update, PackagesPayload } from '../gen/payloads';
 import type { HandEvents } from '../events-hand';
+import { askText } from '../dialog';
 
 const COLS: SortCol[] = [
   { key: 'name', label: 'Package' },
@@ -277,14 +278,15 @@ export function initPackagesPage(socket: Socket, isVisible: (page: string) => bo
 
     const up = el<HTMLButtonElement>('pkgFwUpgradeBtn');
     if (up) {
-      up.addEventListener('click', () => {
+      up.addEventListener('click', async () => {
         if (!caps.permitted) return;
         const name = caps.routerName || '';
         // Typed confirmation, as Apply uses: this reboots a production router,
         // and the name is what makes the wrong router a hard mistake to make.
-        const typed = window.prompt(
+        const typed = await askText(
           'This writes the RouterBOOT firmware and REBOOTS the router.\n\n' +
-          'Type the router name to confirm: ' + name);
+          'Type the router name to confirm: ' + name,
+          { title: 'Upgrade RouterBOOT', okLabel: 'Upgrade and reboot', danger: true });
         if (typed === null) return;
         setStatus('Upgrading RouterBOOT - the router will reboot');
         socket.emit('packages:fwupgrade', { confirm: typed });
@@ -398,12 +400,13 @@ export function initPackagesPage(socket: Socket, isVisible: (page: string) => bo
   // A BARE REBOOT, typed back like Apply: it is the same outage.
   const reboot = el('pkgRebootBtn');
   if (reboot) {
-    reboot.addEventListener('click', () => {
+    reboot.addEventListener('click', async () => {
       if (!caps.permitted) { setStatus('You do not have write access to this router'); return; }
       const name = caps.routerName || '';
-      const typed = window.prompt(
+      const typed = await askText(
         'This REBOOTS the router. It will be unreachable for a minute or two.\n\n' +
-        'Type the router name to confirm: ' + name);
+        'Type the router name to confirm: ' + name,
+        { title: 'Reboot router', okLabel: 'Reboot', danger: true });
       if (typed === null) return;
       setStatus('Rebooting…');
       socket.emit('packages:reboot', { confirm: typed });
@@ -412,15 +415,16 @@ export function initPackagesPage(socket: Socket, isVisible: (page: string) => bo
 
   const apply = el('pkgApplyBtn');
   if (apply) {
-    apply.addEventListener('click', () => {
+    apply.addEventListener('click', async () => {
       if (!caps.permitted) return;
       const name = caps.routerName || '';
       // Typed confirmation, not an "are you sure": this reboots a production
       // router, and the name is what makes "the wrong router" a hard mistake to
       // make rather than an easy one.
-      const typed = window.prompt(
+      const typed = await askText(
         'This applies all scheduled package changes and REBOOTS the router.\n\n' +
-        'Type the router name to confirm: ' + name);
+        'Type the router name to confirm: ' + name,
+        { title: 'Apply package changes', okLabel: 'Apply and reboot', danger: true });
       if (typed === null) return;
       socket.emit('packages:apply', { confirm: typed });
     });

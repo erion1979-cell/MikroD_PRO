@@ -135,7 +135,9 @@ async function mount(opts) {
   const confirms = [];
 
   global.document = doc;
-  global.window = { confirm: (m) => { confirms.push(m); return o.confirm !== false; } };
+  global.window = {};
+  // The app asks in its own dialog (src/dialog.ts); tests answer through this.
+  global.mikrodashTestDialogs = { confirm: (m) => { confirms.push(m); return o.confirm !== false; } };
   global.fetch = (url, init) => {
     calls.push({
       url,

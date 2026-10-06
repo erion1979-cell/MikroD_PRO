@@ -93,7 +93,9 @@ function mount(providers, baseUrlSet = true, before) {
     addEventListener: () => {},
     createElement: () => makeEl(''),
   };
-  global.window = { confirm: () => true };
+  global.window = {};
+  // The app asks in its own dialog (src/dialog.ts); tests answer through this.
+  global.mikrodashTestDialogs = { confirm: () => true };
   global.fetch = (url, opts) => {
     const u = String(url);
     if (opts && opts.method && opts.method !== 'GET') {

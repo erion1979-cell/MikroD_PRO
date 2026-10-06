@@ -26,6 +26,7 @@
 
 import { el, esc } from '../dom';
 import { onZtpState, ztpDeviceForRouter } from '../ztp-state';
+import { askConfirm, tell } from '../dialog';
 
 export interface RouterRow {
   id: string;
@@ -326,23 +327,29 @@ export function initSettingsRoutersTable(d: RouterTableDeps): void {
         body: JSON.stringify({ disabled: !rr.disabled }),
       })
         .then((res) => res.json())
-        .then((j) => { if (!j.ok) alert(j.error || 'Toggle failed'); })
-        .catch(() => alert('Network error'));
+        .then((j) => { if (!j.ok) void tell(j.error || 'Toggle failed', { title: 'Not changed' }); })
+        .catch(() => void tell('Network error', { title: 'Not changed' }));
       return;
     }
 
     if (action === 'delete') {
       const label = btn.dataset.rtrLabel || id;
-      if (!confirm(deleteRouterPrompt(label))) return;
-      fetch('/api/routers/' + encodeURIComponent(id), {
-        method: 'DELETE',
-        credentials: 'same-origin',
-      })
-        .then((r) => r.json())
-        .then((r) => { if (!r.ok) alert('Delete failed: ' + (r.error || 'Unknown error')); })
-        .catch((e) => alert('Request failed: ' + e));
+      void askConfirm(deleteRouterPrompt(label), { title: 'Delete device', okLabel: 'Delete', danger: true }).then((yes) => {
+        if (yes) deleteRouter(id);
+      });
     }
   });
+
+  /** The delete itself, once confirmed. */
+  function deleteRouter(id: string): void {
+    fetch('/api/routers/' + encodeURIComponent(id), {
+      method: 'DELETE',
+      credentials: 'same-origin',
+    })
+      .then((r) => r.json())
+      .then((r) => { if (!r.ok) void tell('Delete failed: ' + (r.error || 'Unknown error'), { title: 'Not deleted' }); })
+      .catch((e) => void tell('Request failed: ' + e, { title: 'Not deleted' }));
+  }
 
   renderRoutersInto();
 }

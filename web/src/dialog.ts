@@ -1,16 +1,39 @@
-// MikroDash's own small dialogs: ask for a line of text, ask to confirm, or say
-// something. They replace the browser's window.prompt / confirm / alert, which
-// look like the browser speaking ("192.168.20.26:3081 says") rather than the app.
+// MikroDash's own dialogs: confirm, ask for a line of text, or tell. They
+// replace the browser's window.confirm / prompt / alert everywhere in the app,
+// which look like the browser speaking ("192.168.20.26:3081 says") rather than
+// MikroDash, and cannot be styled.
 //
 // ── BUILT IN SCRIPT, ON THE APP'S MODAL STYLES ──────────────────────────────
 //
 // One dialog element, made on first use and reused, with the same classes as
 // every page's dialogs (rtr-modal-bg, rtr-modal, the footer buttons), so it
 // looks like the rest of the app in both themes. It answers with a promise:
-// the text or null, true or false. Enter confirms, Escape and the backdrop
-// cancel; it stacks above other dialogs, so it can be asked from inside one.
+// true or false, the text or null. Enter confirms, Escape and the backdrop
+// cancel, and it stacks above other dialogs, so it can be asked from inside one.
+// A message keeps its line breaks.
+//
+// ── NOT BLOCKING, SO EVERY CALLER AWAITS ────────────────────────────────────
+//
+// The browser's dialogs stopped the page until answered; these do not. A caller
+// awaits the answer, and must act on what it captured BEFORE asking, since the
+// page may have changed while the dialog was open.
+//
+// ── TESTS ANSWER THROUGH ONE SEAM ───────────────────────────────────────────
+//
+// The web tests drive pages on a fake DOM that cannot draw a dialog. They set
+// `globalThis.mikrodashTestDialogs` to answer in its place, as they used to
+// stub window.confirm; nothing in the app sets it.
 
 import { esc } from './dom';
+
+/** How the tests answer (see above). */
+interface TestDialogs {
+  confirm?: (message: string) => boolean;
+  prompt?: (message: string, value: string) => string | null;
+  alert?: (message: string) => void;
+}
+const testDialogs = (): TestDialogs | undefined =>
+  (globalThis as { mikrodashTestDialogs?: TestDialogs }).mikrodashTestDialogs;
 
 interface Shown { body: HTMLElement; ok: HTMLButtonElement; cancel: HTMLButtonElement }
 
@@ -65,11 +88,37 @@ function settle<T>(s: Shown, answer: () => T, none: T, focus: HTMLElement): Prom
   });
 }
 
-/** Ask for one line of text: the text, or null when cancelled. */
-export function askText(o: { title: string; label: string; value?: string; okLabel?: string; maxLength?: number }): Promise<string | null> {
-  const s = show(o.title, o.okLabel || 'OK', 'Cancel', false);
-  s.body.innerHTML = '<label class="sform-label"></label><input class="sform-input" type="text" autocomplete="off">';
-  s.body.querySelector('label')!.textContent = o.label;
+function message(body: HTMLElement, text: string): void {
+  body.innerHTML = '<p class="app-dialog-msg"></p>';
+  body.querySelector('p')!.textContent = text;
+}
+
+/**
+ * Ask to confirm: true for OK. `danger` paints OK red, for something that
+ * deletes or cannot be undone.
+ */
+export function askConfirm(
+  text: string, o: { title?: string; okLabel?: string; danger?: boolean } = {},
+): Promise<boolean> {
+  const t = testDialogs();
+  if (t) return Promise.resolve(t.confirm ? t.confirm(text) : true);
+  const s = show(o.title || 'Please confirm', o.okLabel || 'OK', 'Cancel', !!o.danger);
+  message(s.body, text);
+  return settle(s, () => true, false, s.cancel);
+}
+
+/**
+ * Ask for one line of text: the text, or null when cancelled. `label` is the
+ * question, which may run to several lines.
+ */
+export function askText(
+  label: string, o: { title?: string; value?: string; okLabel?: string; maxLength?: number; danger?: boolean } = {},
+): Promise<string | null> {
+  const t = testDialogs();
+  if (t) return Promise.resolve(t.prompt ? t.prompt(label, o.value || '') : null);
+  const s = show(o.title || 'MikroDash', o.okLabel || 'OK', 'Cancel', !!o.danger);
+  s.body.innerHTML = '<label class="app-dialog-msg app-dialog-q"></label><input class="sform-input" type="text" autocomplete="off">';
+  s.body.querySelector('label')!.textContent = label;
   const input = s.body.querySelector('input')!;
   input.value = o.value || '';
   if (o.maxLength) input.maxLength = o.maxLength;
@@ -78,18 +127,11 @@ export function askText(o: { title: string; label: string; value?: string; okLab
   return p;
 }
 
-/** Ask to confirm: true for OK. `danger` paints OK red, for a deletion. */
-export function askConfirm(o: { title: string; message: string; okLabel?: string; danger?: boolean }): Promise<boolean> {
-  const s = show(o.title, o.okLabel || 'OK', 'Cancel', !!o.danger);
-  s.body.innerHTML = '<p class="app-dialog-msg"></p>';
-  s.body.querySelector('p')!.textContent = o.message;
-  return settle(s, () => true, false, s.cancel);
-}
-
 /** Say something, with one OK button. */
-export function tell(o: { title: string; message: string }): Promise<void> {
-  const s = show(o.title, 'OK', null, false);
-  s.body.innerHTML = '<p class="app-dialog-msg"></p>';
-  s.body.querySelector('p')!.textContent = o.message;
+export function tell(text: string, o: { title?: string } = {}): Promise<void> {
+  const t = testDialogs();
+  if (t) { t.alert?.(text); return Promise.resolve(); }
+  const s = show(o.title || 'MikroDash', 'OK', null, false);
+  message(s.body, text);
   return settle(s, () => undefined, undefined, s.ok);
 }

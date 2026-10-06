@@ -73,7 +73,9 @@ function mount() {
     addEventListener: () => {},
     createElement: () => makeEl(''),
   };
-  global.window = { confirm: () => true };
+  global.window = {};
+  // The app asks in its own dialog (src/dialog.ts); tests answer through this.
+  global.mikrodashTestDialogs = { confirm: () => true };
   global.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) });
 
   delete require.cache[require.resolve(OUT)];

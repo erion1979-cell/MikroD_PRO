@@ -136,7 +136,9 @@ function open(reply, readOnly, identity, rangeKey) {
     addEventListener: () => {},
     createElement: () => makeEl(''),
   };
-  global.window = { confirm: () => true };
+  global.window = {};
+  // The app asks in its own dialog (src/dialog.ts); tests answer through this.
+  global.mikrodashTestDialogs = { confirm: () => true };
   // A REAL STORE, shared by every `open` in this file, because a browser's is.
   //
   // The panel no longer reads or writes it - `deliverRow` picks a range by

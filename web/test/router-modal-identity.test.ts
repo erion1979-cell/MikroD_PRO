@@ -62,7 +62,9 @@ const settle = async () => { for (let i = 0; i < 5; i++) await new Promise((r) =
     querySelector: () => null, querySelectorAll: () => [], addEventListener: () => {},
     createElement: () => makeEl(''),
   };
-  global.window = { confirm: () => true };
+  global.window = {};
+  // The app asks in its own dialog (src/dialog.ts); tests answer through this.
+  global.mikrodashTestDialogs = { confirm: () => true };
   global.fetch = (url) => {
     if (url === '/api/routers/r1/identity') {
       return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ available: true, name: 'office-gw' }) });

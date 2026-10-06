@@ -22,6 +22,7 @@ import type { Socket } from '../socket';
 import type { PowerCond, PowerState } from '../gen/payloads';
 import { drawPowerCharts, stopPowerCharts, type HistPoint } from './power-ups-chart';
 import { createPowerFlowAnim, flowLanes } from './power-flow-anim';
+import { askConfirm } from '../dialog';
 
 type Cond = PowerCond;
 type UnitState = PowerState;
@@ -624,7 +625,8 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
   async function remove(): Promise<void> {
     const id = input('pwf_id').value;
     const name = input('pwf_name').value;
-    if (!id || !confirm('Delete ' + name + '? Its history and events are deleted with it.')) return;
+    if (!id || !(await askConfirm('Delete ' + name + '? Its history and events are deleted with it.',
+      { title: 'Delete unit', okLabel: 'Delete', danger: true }))) return;
     try {
       await api('/api/power/units/' + encodeURIComponent(id), { method: 'DELETE' });
       el('pwFormWrap')!.classList.remove('open');

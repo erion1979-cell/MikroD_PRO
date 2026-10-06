@@ -71,7 +71,9 @@ function mount() {
     querySelectorAll: () => [], querySelector: () => null,
     addEventListener: () => {}, createElement: () => makeEl(''),
   };
-  global.window = { confirm: () => true };
+  global.window = {};
+  // The app asks in its own dialog (src/dialog.ts); tests answer through this.
+  global.mikrodashTestDialogs = { confirm: () => true };
   global.fetch = (url, init) => {
     calls.push({ url, method: (init && init.method) || 'GET',
       body: init && init.body ? JSON.parse(init.body) : null });

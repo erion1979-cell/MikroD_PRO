@@ -31,6 +31,7 @@ import type { Socket } from '../socket';
 import type { WAN, WANPayload } from '../gen/payloads';
 import { fmtMb } from './wan-flow-layout';
 import { createWanFlow } from './wan-flow';
+import { askConfirm } from '../dialog';
 
 const COLS: SortCol[] = [
   { key: '', label: 'Uplink' }, { key: '', label: 'Address' }, { key: '', label: 'Gateway' },
@@ -311,8 +312,9 @@ export function initWanPage(socket: Socket, isVisible: (page: string) => boolean
     const msg = verb === 'release'
       ? 'Release the DHCP lease on "' + name + '"?\n\nThe uplink goes down until the client rebinds - usually seconds, but it is a real outage.'
       : 'Renew the DHCP lease on "' + name + '"?\n\nThe uplink blips briefly while the lease is renewed.';
-    if (!window.confirm(msg)) return;
-    send(verb, id, name);
+    void askConfirm(msg, { title: verb === 'release' ? 'Release DHCP lease' : 'Renew DHCP lease',
+      okLabel: verb === 'release' ? 'Release' : 'Renew', danger: verb === 'release' })
+      .then((yes) => { if (yes) send(verb, id, name); });
   });
 
   el('wanWarnGo')?.addEventListener('click', () => {

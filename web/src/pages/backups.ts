@@ -27,6 +27,7 @@ import type { Socket } from '../socket';
 import type { StatePayload } from '../gen/payloads';
 import type { HandEvents } from '../events-hand';
 import { hunksHTML } from '../diffview';
+import { askConfirm, askText } from '../dialog';
 
 /** Every outcome the runner can record. An unknown one still renders. */
 const OUTCOME: Record<string, { label: string; cls: string }> = {
@@ -318,7 +319,7 @@ export function initBackupsPage(socket: Socket, isVisible: (page: string) => boo
     socket.emit('backups:run');
   }
 
-  function deleteSelected(): void {
+  async function deleteSelected(): Promise<void> {
     if (!state || !picked.size) return;
     const ids = Array.from(picked);
     const msg = ids.length === 1
@@ -326,8 +327,9 @@ export function initBackupsPage(socket: Socket, isVisible: (page: string) => boo
       : 'Delete these ' + ids.length + ' restore points?';
     // BOTH HALVES GO - the files and the row listing them - so say so, and say
     // where the record does survive rather than implying nothing is kept.
-    if (!window.confirm(msg + '\n\nThe stored files and their history rows are removed,\n' +
-      'and cannot be recovered. The Audit page keeps the record.')) return;
+    if (!(await askConfirm(msg + '\n\nThe stored files and their history rows are removed,\n' +
+      'and cannot be recovered. The Audit page keeps the record.',
+      { title: 'Delete restore points', okLabel: 'Delete', danger: true }))) return;
     socket.emit('backups:delete', { ids });
     picked.clear();
     syncBulk();
@@ -335,7 +337,7 @@ export function initBackupsPage(socket: Socket, isVisible: (page: string) => boo
 
   function restoreSelected(): void {
     if (picked.size !== 1) return;
-    askRestore(Array.from(picked)[0]!, false);
+    void askRestore(Array.from(picked)[0]!, false);
   }
 
   /**
@@ -347,7 +349,7 @@ export function initBackupsPage(socket: Socket, isVisible: (page: string) => boo
    * version mismatch, and the answer to that question is what turns the refusal
    * into a go-ahead.
    */
-  function askRestore(id: number, acceptVersion: boolean, versionNote?: string): void {
+  async function askRestore(id: number, acceptVersion: boolean, versionNote?: string): Promise<void> {
     if (!state) return;
     const lines = [
       'Restore ' + state.label + ' from this backup?',
@@ -361,7 +363,7 @@ export function initBackupsPage(socket: Socket, isVisible: (page: string) => boo
     ];
     if (versionNote) lines.push('', versionNote);
     lines.push('', 'Type the router name to confirm:');
-    const answer = window.prompt(lines.join('\n'), '');
+    const answer = await askText(lines.join('\n'), { title: 'Restore backup', okLabel: 'Restore', danger: true });
     if (answer === null) return;
     socket.emit('backups:restore', { id, confirm: answer, acceptVersion: !!acceptVersion });
     pendingRestore = id;
@@ -430,7 +432,7 @@ export function initBackupsPage(socket: Socket, isVisible: (page: string) => boo
     if (e?.code === 'version-mismatch' && pendingRestore !== null) {
       // Asked once, then answered by re-submitting. The server refuses the first
       // attempt precisely so this sentence can name both versions.
-      askRestore(pendingRestore, true,
+      void askRestore(pendingRestore, true,
         'WARNING: this backup was taken on RouterOS ' + e.was +
         ' and the router now runs ' + e.now + '. MikroTik recommend matching versions.');
       return;

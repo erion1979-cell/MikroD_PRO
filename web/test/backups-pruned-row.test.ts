@@ -85,7 +85,9 @@ function boot(rows, summary) {
   const prevDoc = global.document;
   const prevWin = global.window;
   global.document = doc;
-  global.window = { addEventListener: () => {}, setTimeout, clearTimeout, confirm: () => true };
+  global.window = { addEventListener: () => {}, setTimeout, clearTimeout };
+  // The app asks in its own dialog (src/dialog.ts); tests answer through this.
+  global.mikrodashTestDialogs = { confirm: () => true };
   const { initBackupsPage } = require(OUT);
   initBackupsPage(socket, () => true);
   handlers['backups:state']({
