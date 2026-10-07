@@ -93,6 +93,24 @@ assert.strictEqual(lanes({ mains_ok: true, charger_on: true, inverter_on: false,
   'mains:input>unit charge:unit>battery', 'an output switched off still flows');
 assert.strictEqual(lanes({ mains_ok: true, charger_on: true, inverter_on: true, output_on: true }, true), '',
   'a unit that is not answering shows movement');
+// An online unit: mains charges the battery through the Charger, the Inverter
+// runs from the battery side and always feeds the output; mains reaches the
+// output only on bypass.
+const online = (flags: Record<string, boolean>, down = false) =>
+  m.flowLanes({ down, topology: 'online', flags, values: { load_pct: 42 } })
+    .map((l: { from: string; to: string; key: string }) => l.key + ':' + l.from + '>' + l.to).join(' ');
+assert.strictEqual(online({ mains_ok: true, charger_on: true, inverter_on: true, output_on: true }),
+  'mains:input>unit charge:charger>battery dcbus:battery>inverter output:unit>output', 'online, on mains');
+assert.strictEqual(online({ mains_ok: false, charger_on: false, inverter_on: true, output_on: true }),
+  'discharge:battery>inverter output:unit>output', 'online, on battery');
+assert.strictEqual(online({ mains_ok: true, charger_on: true, inverter_on: false, output_on: true, bypass: true }),
+  'bypass:input>unit charge:charger>battery bypass:unit>output', 'online, on bypass');
+assert.strictEqual(online({ mains_ok: true, charger_on: false, inverter_on: false, output_on: false }),
+  'mains:input>unit', 'an online unit with its inverter off still feeds the output');
+assert.strictEqual(online({ mains_ok: true, inverter_on: true, output_on: true }, true), '',
+  'a silent online unit shows movement');
+assert.strictEqual(lanes({ mains_ok: true, charger_on: true, inverter_on: false, output_on: true, bypass: true }),
+  'mains:input>unit charge:unit>battery output:unit>output', 'an offline unit drew a bypass');
 assert.strictEqual(m.flowLanes({ down: false, flags: { mains_ok: true, output_on: true }, values: { load_pct: 250 } })[0].load, 1,
   'a load past 100 % is not capped');
 

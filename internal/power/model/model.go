@@ -34,6 +34,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path"
+	"slices"
 	"sort"
 	"strconv"
 	"sync"
@@ -67,7 +68,13 @@ var Measures = []Measure{
 }
 
 // Flags is every status bit a definition may name.
-var Flags = []string{"mains_ok", "charger_on", "inverter_on", "output_on"}
+var Flags = []string{"mains_ok", "charger_on", "inverter_on", "output_on", "bypass"}
+
+// Topologies are how a unit feeds its output. Offline (and line-interactive):
+// mains passes to the output and the inverter takes over when it fails. Online
+// (double conversion): the charger feeds the battery and the inverter feeds the
+// output all the time, mains never reaching the output except on bypass.
+var Topologies = []string{"offline", "online"}
 
 // RawKeys is every register a definition may pass through undecoded, for bit
 // fields whose meaning the manufacturer has not documented yet.
@@ -138,6 +145,9 @@ type Model struct {
 	// Uses names the map this product reads with: a model id in the same
 	// brand. A product that uses a map carries no registers of its own.
 	Uses string `json:"uses,omitempty"`
+	// Topology is "offline" (the default) or "online"; a product that names
+	// none takes its map's. The page draws the power flow by it.
+	Topology string `json:"topology,omitempty"`
 	// Details are the product's technical details, one line each, shown on
 	// request in the unit form.
 	Details []string `json:"details,omitempty"`
@@ -254,6 +264,9 @@ func parse(name string, b []byte) (*Model, error) {
 	}
 	if m.Producer == "" || m.Model == "" || m.ProducerName == "" || m.ModelName == "" {
 		return fail("producer, producerName, model and modelName are all required")
+	}
+	if m.Topology != "" && !slices.Contains(Topologies, m.Topology) {
+		return fail("topology %q: want offline or online", m.Topology)
 	}
 	if m.Kind != "inverter" && m.Kind != "ups" {
 		return fail("kind %q: want inverter or ups", m.Kind)
@@ -432,9 +445,10 @@ func load(fsys fs.FS, root string) ([]*Model, error) {
 	return out, resolveUses(out)
 }
 
-// resolveUses gives each product the registers of the map it uses. A map is a
-// model with registers of its own: one that itself uses another is refused,
-// so there is never a chain to follow.
+// resolveUses gives each product the registers of the map it uses, and its
+// topology unless the product names its own; a model naming none is offline.
+// A map is a model with registers of its own: one that itself uses another is
+// refused, so there is never a chain to follow.
 func resolveUses(all []*Model) error {
 	byID := map[string]*Model{}
 	for _, m := range all {
@@ -452,6 +466,14 @@ func resolveUses(all []*Model) error {
 		m.codes, m.notFault = base.codes, base.notFault
 		if m.Serial == "" {
 			m.Serial = base.Serial
+		}
+		if m.Topology == "" {
+			m.Topology = base.Topology
+		}
+	}
+	for _, m := range all {
+		if m.Topology == "" {
+			m.Topology = Topologies[0]
 		}
 	}
 	return nil

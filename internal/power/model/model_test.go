@@ -241,6 +241,7 @@ func TestABrokenDefinitionIsRefused(t *testing.T) {
 		"no not-fault codes":         func(d map[string]any) { d["event"].(map[string]any)["notFault"] = []any{} },
 		"an unknown kind":            func(d map[string]any) { d["kind"] = "generator" },
 		"no producer name":           func(d map[string]any) { d["producerName"] = "" },
+		"an unknown topology":        func(d map[string]any) { d["topology"] = "line-interactive" },
 		"an ambiguous function": func(d map[string]any) {
 			d["reads"] = append(d["reads"].([]any), map[string]any{"function": 3, "start": 0, "count": 10})
 		},
@@ -288,6 +289,51 @@ func TestAProductReadsWithItsMap(t *testing.T) {
 		if a.Mode != b.Mode || a.Values["battery_v"] != b.Values["battery_v"] || a.EventText != b.EventText {
 			t.Errorf("HP-10212 reads %+v, the map %+v", a, b)
 		}
+	}
+}
+
+// A TOPOLOGY IS INHERITED, AND OFFLINE UNLESS SAID: a product naming none
+// takes its map's, one naming its own keeps it, and the bypass bit is a flag a
+// map may declare.
+func TestATopologyComesFromTheProductOrItsMap(t *testing.T) {
+	product := func(id, topology string) []byte {
+		d := map[string]any{"producer": "powerguard", "producerName": "PowerGuard", "model": id,
+			"modelName": id, "kind": "ups", "uses": "modbus-v1.1"}
+		if topology != "" {
+			d["topology"] = topology
+		}
+		b, _ := json.Marshal(d)
+		return b
+	}
+	for _, mapTopology := range []string{"", "online"} {
+		fsys := fstest.MapFS{
+			"defs/powerguard/modbus-v1.1.json": {Data: mutate(t, func(d map[string]any) {
+				if mapTopology != "" {
+					d["topology"] = mapTopology
+				}
+				d["flags"].(map[string]any)["bits"].(map[string]any)["bypass"] = 5
+			})},
+			"defs/powerguard/inherits.json": {Data: product("inherits", "")},
+			"defs/powerguard/offline.json":  {Data: product("offline", "offline")},
+			"defs/powerguard/online.json":   {Data: product("online", "online")},
+		}
+		all, err := load(fsys, "defs")
+		if err != nil {
+			t.Fatal(err)
+		}
+		mapWant := mapTopology
+		if mapWant == "" {
+			mapWant = "offline"
+		}
+		want := map[string]string{"modbus-v1.1": mapWant, "inherits": mapWant, "offline": "offline", "online": "online"}
+		for _, m := range all {
+			if m.Topology != want[m.Model] {
+				t.Errorf("map %q: %s is %q, want %q", mapTopology, m.Model, m.Topology, want[m.Model])
+			}
+		}
+	}
+	if m := powerguard(t); m.Topology != "offline" {
+		t.Errorf("the PowerGuard map is %q, want offline", m.Topology)
 	}
 }
 

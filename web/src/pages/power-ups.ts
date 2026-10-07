@@ -43,6 +43,8 @@ export interface Unit {
   producerName: string;
   modelName: string;
   serial: string;
+  /** "online" draws the flow through a Charger and an Inverter; else offline. */
+  topology: string;
   canWrite: boolean;
   state: UnitState | null;
 }
@@ -496,6 +498,9 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
     banner.className = 'pw-banner pw-banner-' + s;
     const openEvent = st?.open.find((c) => c.kind === 'event');
     const openMains = st?.open.find((c) => c.kind === 'mains_lost');
+    // An online (double-conversion) unit: its output always comes from the
+    // inverter, and the flow is drawn through its Charger and Inverter.
+    const online = u.topology === 'online';
     let title = statusLabel(u);
     let sub = '';
     if (s === 'fault' && openEvent) {
@@ -504,9 +509,13 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
     } else if (s === 'battery') {
       title = 'On battery - mains lost';
       sub = (openMains ? 'Mains failed ' + ago(openMains.beganAt) + ' · ' : '') + 'output is supplied from the battery';
+    } else if (s === 'mains' && online && f.bypass) {
+      title = 'On bypass - output fed straight from mains';
+      sub = 'Not protected: the inverter is out of the path until the unit returns to online';
     } else if (s === 'mains') {
       title = 'Normal - running on mains';
       sub = st?.eventCode ? st.eventText : 'No active events';
+      if (online) sub += ' · online: the inverter always feeds the output, mains charges the battery';
     } else if (s === 'down' && st?.cause === 'converter') {
       sub = 'No connection to the converter at ' + u.host + ':' + u.port +
         ' - it is off, unplugged or off the network. The inverter behind it cannot be seen.';
@@ -522,6 +531,7 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
     el('pwBannerSub')!.textContent = sub;
     el('pwChips')!.innerHTML = ([
       ['mains_ok', 'Mains normal'], ['charger_on', 'Charger running'], ['inverter_on', 'Inverter running'], ['output_on', 'Output on'],
+      ['bypass', 'Bypass'],
     ] as [string, string][]).filter(([k]) => k in f).map(([k, label]) => stale
       // Unknown, not off: the last reading said one thing, and nobody knows now.
       ? `<span class="pw-chip pw-chip-unknown" title="Unknown: the unit is not answering"><span class="pw-dot pw-tone-idle"></span>${label}?</span>`
@@ -538,6 +548,15 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
     // output is on, red while it is off; the battery by its charge (batteryTone).
     const outTone = stale || !('output_on' in f) ? '' : f.output_on ? ' pw-node-ok' : ' pw-node-bad';
     const batTone = stale ? '' : ({ ok: ' pw-node-ok', warn: ' pw-node-warn', down: ' pw-node-down', '': '' })[batteryTone(v.battery_pct)];
+    // Online: the Charger and Inverter inside the unit box, each with its
+    // line down to the battery, coloured like the particles on it.
+    const bypass = online && !stale && !!f.bypass;
+    const chargerOn = mainsOn && !!f.charger_on;
+    const inverterOn = !stale && !bypass && !!f.inverter_on;
+    const subs = !online ? '' : `<div class="pw-subs">
+        <div class="pw-sub${chargerOn ? ' is-on pw-track-charge' : ''}" data-pwn="charger">Charger</div>
+        <div class="pw-sub${inverterOn ? ' is-on ' + (mainsOn ? 'pw-track-dc' : 'pw-track-bat') : ''}" data-pwn="inverter">Inverter</div></div>`;
+    const linkCls = online ? 'is-online' : fromBattery ? 'is-on' : mainsOn && f.charger_on ? 'is-charge' : '';
     const apparent = el('pwApparent')!;
     apparent.classList.toggle('pw-age-alert', down);
     apparent.textContent = stale
@@ -545,14 +564,14 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
       : st?.apparentVa != null ? 'Apparent power (calculated V × A): ' + Math.round(st.apparentVa).toLocaleString() + ' VA' : '';
     el('pwFlow')!.innerHTML = `
       <div class="pw-node${mainsTone}" data-pwn="input"><div class="pw-node-label">Mains input</div><div class="pw-node-v">${fmt(v.input_v)} V</div><div class="pw-node-sub">${fmt(v.input_hz)} Hz</div></div>
-      <div class="pw-arrow ${mainsOn ? 'is-on' : ''}"></div>
-      <div class="pw-node pw-node-mid${down ? ' pw-node-down' : ''}" data-pwn="unit"><div class="pw-node-label" title="${esc(unitTitle(u))}">${unitLabel(u)}</div><div class="pw-node-v pw-tone-${s === 'mains' ? 'ok' : s === 'battery' ? 'warn' : 'bad'}">${esc(statusLabel(u))}</div><div class="pw-node-sub">DC bus ${fmt(v.dc_bus_a)} A</div></div>
-      <div class="pw-arrow ${f.output_on && !stale ? 'is-on' : ''} ${s === 'fault' ? 'is-bad' : ''}"></div>
+      <div class="pw-arrow ${mainsOn ? 'is-on' : ''}${bypass ? ' is-bypass' : ''}"></div>
+      <div class="pw-node pw-node-mid${down ? ' pw-node-down' : ''}" data-pwn="unit"><div class="pw-node-label" title="${esc(unitTitle(u))}">${unitLabel(u)}</div><div class="pw-node-v pw-tone-${s === 'mains' && !bypass ? 'ok' : s === 'battery' || bypass ? 'warn' : 'bad'}">${esc(bypass ? 'On bypass' : statusLabel(u))}</div><div class="pw-node-sub">DC bus ${fmt(v.dc_bus_a)} A</div>${subs}</div>
+      <div class="pw-arrow ${f.output_on && !stale ? 'is-on' : ''} ${s === 'fault' ? 'is-bad' : ''}${bypass && f.output_on ? ' is-bypass' : ''}"></div>
       <div class="pw-node${outTone}" data-pwn="output"><div class="pw-node-label">Output / load</div><div class="pw-node-v">${fmt(v.output_v)} V</div><div class="pw-node-sub">${fmt(v.output_a)} A · ${fmt(v.load_pct, 0)} %</div></div>
-      <div class="pw-battery-link ${fromBattery ? 'is-on' : mainsOn && f.charger_on ? 'is-charge' : ''}"><div class="pw-node${batTone}" data-pwn="battery"><div class="pw-node-label">Battery</div><div class="pw-node-v">${fmt(v.battery_v)} V · ${fmt(v.battery_pct, 0)} %</div></div></div>`;
+      <div class="pw-battery-link ${linkCls}"><div class="pw-node${batTone}" data-pwn="battery"><div class="pw-node-label">Battery</div><div class="pw-node-v">${fmt(v.battery_v)} V · ${fmt(v.battery_pct, 0)} %</div></div></div>`;
 
     // The particles along those lines, from the same status bits.
-    flowAnim.set(flowLanes({ down: stale, flags: f, values: v }));
+    flowAnim.set(flowLanes({ down: stale, topology: u.topology, flags: f, values: v }));
 
     // Battery: % is voltage-based and reads high while charging, so the
     // voltage stands beside it.
@@ -586,6 +605,7 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
       ['Reply time', st?.answered ? Math.round(st.replyMs) + ' ms' : '—'],
       ['Success', success == null ? '—' : success + ' %'],
       ['Model', (u.producerName + ' ' + u.modelName).trim() || u.model],
+      ...(u.topology ? [['Type', online ? 'Online (double conversion)' : 'Offline']] : []),
       ...(router ? [['Router', router.label]] : []),
     ].map(([k, val]) => `<span><span class="muted-note">${k}</span> <span class="pw-mono">${esc(val)}</span></span>`).join('');
   }

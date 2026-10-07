@@ -166,7 +166,10 @@ type powerUnitView struct {
 	ProducerName string `json:"producerName"`
 	ModelName    string `json:"modelName"`
 	Serial       string `json:"serial"`
-	CanWrite     bool   `json:"canWrite"`
+	// Topology is the model's, "offline" or "online", and decides how the page
+	// draws the power flow; empty for a model this build does not have.
+	Topology string `json:"topology"`
+	CanWrite bool   `json:"canWrite"`
 	// State is nil when nothing polls the unit: disabled, -no-pool, or a model
 	// this build does not have.
 	State *PowerState `json:"state"`
@@ -223,7 +226,7 @@ func (s *Server) powerList(w http.ResponseWriter, r *http.Request) {
 		}
 		v := powerUnitView{PowerUnit: u, CanWrite: s.powerMay(sess, "write", siteOf(u))}
 		if m := model.ByID(u.Model); m != nil {
-			v.ProducerName, v.ModelName, v.Serial = m.ProducerName, m.ModelName, m.Serial
+			v.ProducerName, v.ModelName, v.Serial, v.Topology = m.ProducerName, m.ModelName, m.Serial, m.Topology
 		}
 		if st, ok := states[u.ID]; ok {
 			sv := powerStateView(st)

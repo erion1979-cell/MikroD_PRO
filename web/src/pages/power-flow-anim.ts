@@ -13,6 +13,16 @@
 //   silent       nothing: a unit that is not answering shows no movement,
 //                because nobody knows what it is doing.
 //
+// That is an offline unit, whose mains passes to the output. An ONLINE unit
+// (double conversion, the model file's "topology") has a Charger and an
+// Inverter inside its box, and its output always comes from the inverter:
+//
+//   on mains     input → unit, charger → battery while the charger runs,
+//                battery → inverter (the DC bus), unit → output;
+//   on battery   battery → inverter, unit → output;
+//   on bypass    input → unit → output in amber, when the unit reports it:
+//                mains straight to the load, the inverter out of the path.
+//
 // Each comes from the unit's own status bits, never from the mode alone, so a
 // fault that switched the output off stops the output lane.
 //
@@ -34,8 +44,8 @@ import { el } from '../dom';
 
 const NS = 'http://www.w3.org/2000/svg';
 
-export type FlowNode = 'input' | 'unit' | 'output' | 'battery';
-export type LaneKey = 'mains' | 'output' | 'charge' | 'discharge';
+export type FlowNode = 'input' | 'unit' | 'output' | 'battery' | 'charger' | 'inverter';
+export type LaneKey = 'mains' | 'output' | 'charge' | 'discharge' | 'dcbus' | 'bypass';
 
 /** One lane carrying power now: where from, where to, and how busy. */
 export interface FlowLane { key: LaneKey; from: FlowNode; to: FlowNode; load: number }
@@ -43,6 +53,8 @@ export interface FlowLane { key: LaneKey; from: FlowNode; to: FlowNode; load: nu
 /** What `flowLanes` reads of a unit. */
 export interface FlowReading {
   down: boolean;
+  /** The model's topology: "online", or offline when anything else. */
+  topology?: string;
   flags: Record<string, boolean>;
   values: Record<string, number>;
 }
@@ -56,6 +68,22 @@ export function flowLanes(r: FlowReading): FlowLane[] {
   // model that does not report it moves at a steady middle pace.
   const load = pct === undefined ? .3 : Math.max(0, Math.min(1, pct / 100));
   const out: FlowLane[] = [];
+  if (r.topology === 'online') {
+    const bypass = !!f.bypass;
+    if (f.mains_ok) {
+      out.push({ key: bypass ? 'bypass' : 'mains', from: 'input', to: 'unit', load });
+      if (f.charger_on) out.push({ key: 'charge', from: 'charger', to: 'battery', load: .2 });
+    }
+    if (bypass) {
+      if (f.output_on) out.push({ key: 'bypass', from: 'unit', to: 'output', load });
+      return out;
+    }
+    // On mains the battery floats on the DC bus the charger feeds; without
+    // mains it is what the inverter runs on.
+    if (f.inverter_on) out.push({ key: f.mains_ok ? 'dcbus' : 'discharge', from: 'battery', to: 'inverter', load });
+    if (f.output_on) out.push({ key: 'output', from: 'unit', to: 'output', load });
+    return out;
+  }
   if (f.mains_ok) {
     out.push({ key: 'mains', from: 'input', to: 'unit', load });
     if (f.charger_on) out.push({ key: 'charge', from: 'unit', to: 'battery', load: .2 });
@@ -102,7 +130,8 @@ export function createPowerFlowAnim(flowId: string, svgId: string): PowerFlowAni
     const r1 = n1.getBoundingClientRect(), r2 = n2.getBoundingClientRect();
     const mid = (r: DOMRect): [number, number] => [r.left + r.width / 2 - o.left, r.top + r.height / 2 - o.top];
     // The battery sits below the unit: those lanes join bottom edge to top
-    // edge. The rest join the facing side edges.
+    // edge, straight down from the unit or from its Charger or Inverter. The
+    // rest join the facing side edges.
     if (from === 'battery' || to === 'battery') {
       const top = from === 'battery' ? r2 : r1, bottom = from === 'battery' ? r1 : r2;
       const x = mid(top)[0];

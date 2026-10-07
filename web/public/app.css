@@ -3831,12 +3831,28 @@
     .pw-battery-link::before{content:'';position:absolute;left:50%;top:-2.6rem;height:2.6rem;width:2px;background:var(--border)}
     .pw-battery-link.is-on::before{background:color-mix(in srgb,var(--accent-warn) 55%,transparent)}
     .pw-battery-link.is-charge::before{background:color-mix(in srgb,#a78bfa 45%,transparent)}
+    /* An online unit: its Charger and Inverter inside the unit box, each with a
+       line straight down to the battery (the unit's padding, border and the
+       row gap), in place of the battery's own centre line. */
+    .pw-subs{display:grid;grid-template-columns:1fr 1fr;gap:.4rem;margin-top:.45rem}
+    .pw-sub{position:relative;border:1px dashed var(--border);border-radius:6px;padding:.2rem .25rem;
+      font-size:.62rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);white-space:nowrap}
+    .pw-sub.is-on{border:1px solid color-mix(in srgb,var(--accent-rx) 60%,var(--border));color:var(--text-main)}
+    .pw-sub::after{content:'';position:absolute;left:50%;top:100%;width:2px;margin-left:-1px;
+      height:calc(.55rem + 1px + 2.6rem);background:var(--border)}
+    .pw-sub.pw-track-charge::after{background:color-mix(in srgb,#a78bfa 45%,transparent)}
+    .pw-sub.pw-track-dc::after{background:color-mix(in srgb,#818cf8 45%,transparent)}
+    .pw-sub.pw-track-bat::after{background:color-mix(in srgb,var(--accent-warn) 55%,transparent)}
+    .pw-battery-link.is-online::before{display:none}
+    .pw-arrow.is-bypass{background:color-mix(in srgb,#f59e0b 55%,transparent)}
     /* The particles over the flow (pages/power-flow-anim.ts): mains blue, output
-       green, charging violet, from the battery amber, as on the Network Flow card. */
+       green, charging violet, from the battery amber, as on the Network Flow card;
+       an online unit's DC bus indigo and its bypass orange-amber. */
     .pw-flow-wrap{position:relative}
     .pw-flow-anim{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
     .pwa-lane{fill:currentColor;filter:drop-shadow(0 0 3px currentColor)}
     .pwa-mains{color:#38bdf8} .pwa-output{color:#34d399} .pwa-charge{color:#a78bfa} .pwa-discharge{color:#fbbf24}
+    .pwa-dcbus{color:#818cf8} .pwa-bypass{color:#f59e0b}
     .pw-events{display:flex;flex-direction:column;gap:.55rem;max-height:22rem;overflow-y:auto}
     .pw-ev{display:flex;gap:.55rem;align-items:flex-start;font-size:.85rem} .pw-ev .pw-dot{margin-top:.35rem}
     .pw-ev-sub{font-size:.75rem;color:var(--text-muted)}
@@ -3935,6 +3951,9 @@
   .pw-bname{display:none}
   .pw-battery-link{grid-column:1 / -1;justify-self:center;min-width:50%}
   .pw-node{padding:.45rem .25rem}
+  .pw-sub{font-size:.5rem;letter-spacing:0;padding:.15rem .1rem}
+  .pw-subs{gap:.2rem}
+  .pw-sub::after{height:calc(.45rem + 1px + 2.6rem)}
   .pw-node-label{font-size:.6rem}
   .pw-node-v{font-size:.82rem;white-space:nowrap}
   .pw-node-mid .pw-node-v{white-space:normal;font-size:.7rem;word-break:normal;overflow-wrap:normal}

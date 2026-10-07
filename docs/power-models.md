@@ -42,6 +42,12 @@ register map is written once and each product is a short file that points at it.
 - **`details`** are the lines the **?** beside Model shows in the form, up to 20 of up to 120
   characters each. Optional. A model without them shows "No detailed technical info on file for this
   model."
+- **`"topology": "online"`** is for an online (double-conversion) inverter or UPS: one whose
+  output always comes from its inverter, mains only charging the battery. The unit's page then
+  draws a **Charger** and an **Inverter** inside the unit box, with the power running from the
+  charger down to the battery and from the battery up to the inverter. Leave it out for an
+  offline unit (mains passes to the output, the inverter takes over when it fails). A product
+  without it takes its map's, and a map without it is offline.
 - **`"default": true`** makes it the model a new unit starts on in the form. Only one model may
   say so; it is HP-10212 today, so move the line rather than add a second.
 
@@ -66,6 +72,7 @@ its brand's existing protocol.
    | `modelName` | the model as people write it | the **Model** list |
    | `kind` | `"inverter"` or `"ups"` | - |
    | `serial` | the RS485 settings, e.g. `"9600 8N1"` | the unit's page |
+   | `topology` | `"offline"` (the default) or `"online"`, as above | the unit's power flow |
    | `details` | optional technical details, one line each | the form's **?** |
 
    A new model of an existing brand goes in that brand's folder with the **same** `producer` and
@@ -88,7 +95,8 @@ its brand's existing protocol.
 
      A model that does not report a value simply leaves it out; the page shows a dash.
    - `flags` - the status register, and which bit means what: `mains_ok`, `charger_on`,
-     `inverter_on`, `output_on` (bit 0 is the lowest).
+     `inverter_on`, `output_on`, and for an online unit `bypass` (mains fed straight to the
+     output; the page draws it in amber and says the load is not protected). Bit 0 is the lowest.
    - `raw` - registers shown as plain numbers: `warning_bits`, `error_bits`.
    - `event` - the register holding the current event code, the text of every code (`codes`), and
      which codes are **not** a fault (`notFault`: "no event", notices such as ECO starting).
