@@ -510,7 +510,8 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
     const bar = el('pwBatBar');
     if (bar) {
       bar.style.width = pct === undefined ? '0' : Math.max(0, Math.min(100, pct)) + '%';
-      bar.className = pct !== undefined && pct <= 20 ? 'pw-tone-bg-bad' : 'pw-tone-bg-ok';
+      // The Battery box's colours (batteryTone): green, amber, red and pulsing.
+      bar.className = ({ ok: 'pw-tone-bg-ok', warn: 'pw-tone-bg-warn', down: 'pw-tone-bg-bad pw-bar-pulse', '': '' })[batteryTone(pct)];
     }
     el('pwBatKv')!.innerHTML = kvs([
       ['Voltage', fmt(v.battery_v) + ' V'], ['DC bus current', fmt(v.dc_bus_a) + ' A'],

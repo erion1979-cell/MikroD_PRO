@@ -3811,7 +3811,8 @@
     .pw-big small{font-size:.8rem;color:var(--text-muted);font-family:var(--font-ui)}
     .pw-bar{height:6px;border-radius:3px;background:var(--border);overflow:hidden;margin:.5rem 0 .6rem}
     .pw-bar>div{height:100%;transition:width .4s}
-    .pw-tone-bg-ok{background:var(--accent-ok)} .pw-tone-bg-bad{background:var(--accent-err)}
+    .pw-tone-bg-ok{background:var(--accent-ok)} .pw-tone-bg-warn{background:var(--accent-warn)} .pw-tone-bg-bad{background:var(--accent-err)}
+    .pw-bar-pulse{animation:pw-pulse-text 1.6s ease-in-out infinite}
     .pw-kv{display:grid;grid-template-columns:1fr 1fr;gap:.35rem .8rem;font-size:.82rem;margin-top:.45rem}
     .pw-kv>div{display:flex;flex-direction:column} .pw-kv>div>span:last-child{font-family:var(--font-mono)}
     .pw-flow{display:grid;grid-template-columns:1fr 6rem 1fr 6rem 1fr;align-items:center;row-gap:2.6rem;padding:.6rem 0}
@@ -3901,7 +3902,7 @@
 .dc-pw-row-down{border-left:3px solid var(--accent-err);padding-left:.4rem}
 .dc-pw-row-down .dc-pw-vals{color:var(--text-muted)}
 @media (prefers-reduced-motion:reduce){
-  .pw-banner-down,.pw-node-down,.vpn-hs-badge.pw-pulse,.pw-age-alert{animation:none}
+  .pw-banner-down,.pw-node-down,.vpn-hs-badge.pw-pulse,.pw-age-alert,.pw-bar-pulse{animation:none}
 }
 /* The power flow on a phone: three equal columns with no arrows between them
    (the battery link below still shows), smaller figures, and a value that never
