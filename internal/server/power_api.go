@@ -134,6 +134,9 @@ type PowerState struct {
 	// does not), or "" (neither can be told, or the last poll answered).
 	Cause string      `json:"cause"`
 	Open  []PowerCond `json:"open"`
+	// Topology is what the unit itself reports it is, "offline" or "online";
+	// "" when it does not say (Modbus), and the model's then stands.
+	Topology string `json:"topology"`
 }
 
 func powerStateView(st power.State) PowerState {
@@ -143,6 +146,7 @@ func powerStateView(st power.State) PowerState {
 	if r := st.Reading; r != nil {
 		out.HasReading = true
 		out.Mode, out.EventCode, out.EventText, out.ApparentVA = string(r.Mode), r.EventCode, r.EventText, r.ApparentVA
+		out.Topology = r.Topology
 		for k, v := range r.Values {
 			out.Values[k] = v
 		}

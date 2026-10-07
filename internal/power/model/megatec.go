@@ -20,7 +20,9 @@ package model
 //   - inverter_on: online, always unless on bypass or failed; standby, only
 //     while the utility has failed.
 //
-// Bit 5 means bypass only on an online UPS; on a standby one it is the voltage
+// Bit 3 says which kind the UPS is, and the reading carries it as its
+// Topology, so the page draws an offline Megatec UPS as offline whatever its
+// model file says. Bit 5 means bypass only on an online UPS; on a standby one it is the voltage
 // regulator boosting or bucking, which is normal operation, so it is not
 // reported as bypass.
 //
@@ -90,6 +92,10 @@ func (m *Model) FromMegatec(s megatec.Status, rating *megatec.Rating) Reading {
 	}
 
 	online := !s.Standby()
+	out.Topology = "offline"
+	if online {
+		out.Topology = "online"
+	}
 	bypass := online && s.BypassOrAVR()
 	out.Flags["mains_ok"] = !s.UtilityFail()
 	out.Flags["battery_low"] = s.BatteryLow()

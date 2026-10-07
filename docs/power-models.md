@@ -73,8 +73,10 @@ A Megatec UPS needs no register map: the protocol fixes what it reports. Its fil
 }
 ```
 
-- **It takes the map's `"topology": "online"`.** Give a standby (offline or line-interactive)
-  product `"topology": "offline"` so the page draws it without Charger and Inverter boxes.
+- **Offline and online alike.** A Megatec UPS reports which kind it is (standby or online), and
+  the page draws it as it reports, whatever `topology` the file says; the file's value (the map
+  says `"online"`) is used only until the first reading. On a standby UPS the "bypass/AVR" bit is
+  its voltage regulator at work and is not shown as bypass.
 - **What is read:** input and output voltage, load %, input frequency, battery voltage,
   temperature, and the status bits: mains failed, battery low, bypass, UPS failed, test in
   progress, shutdown pending. Battery voltage is sized from the UPS's rating line.

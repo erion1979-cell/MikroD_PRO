@@ -136,6 +136,11 @@ export function unitLabel(u: Pick<Unit, 'modelName' | 'producerName'>): string {
 }
 const unitTitle = (u: Unit): string => [u.modelName, u.producerName].filter(Boolean).join(' - ');
 
+/** How the unit feeds its output: as it reports, else as its model says. */
+export function topologyOf(u: Pick<Unit, 'topology' | 'state'>): string {
+  return (u.state?.hasReading && u.state.topology) || u.topology;
+}
+
 export function unitPill(u: Unit): string {
   return pill(statusOf(u), statusLabel(u));
 }
@@ -504,7 +509,9 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
     const openMains = st?.open.find((c) => c.kind === 'mains_lost');
     // An online (double-conversion) unit: its output always comes from the
     // inverter, and the flow is drawn through its Charger and Inverter.
-    const online = u.topology === 'online';
+    // A unit that reports its kind (a Megatec UPS) is drawn as it says, so an
+    // offline UPS on a generic model is not drawn as online.
+    const online = topologyOf(u) === 'online';
     let title = statusLabel(u);
     let sub = '';
     if (s === 'fault' && openEvent) {
@@ -581,7 +588,7 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
       <div class="pw-battery-link ${linkCls}"><div class="pw-node${batTone}" data-pwn="battery"><div class="pw-node-label">Battery</div><div class="pw-node-v">${fmt(v.battery_v)} V · ${estimated ? '~' : ''}${fmt(v.battery_pct, 0)} %</div></div></div>`;
 
     // The particles along those lines, from the same status bits.
-    flowAnim.set(flowLanes({ down: stale, topology: u.topology, flags: f, values: v }));
+    flowAnim.set(flowLanes({ down: stale, topology: topologyOf(u), flags: f, values: v }));
 
     // Battery: % is voltage-based and reads high while charging, so the
     // voltage stands beside it.

@@ -25,7 +25,7 @@ const say = console.log.bind(console);
 const ROOT = process.env.MIKRODASH_ROOT || path.join(__dirname, '..', '..');
 const ENTRY = path.join(ROOT, 'testdata', '.power-ups-entry.ts');
 fs.writeFileSync(ENTRY, [
-  "export { statusOf, statusLabel, ago, duration, eventLine, brandsOf, modelsOf, unitLabel, batteryTone } from '../web/src/pages/power-ups.js';",
+  "export { statusOf, statusLabel, ago, duration, eventLine, brandsOf, modelsOf, unitLabel, batteryTone, topologyOf } from '../web/src/pages/power-ups.js';",
   "export { withGaps } from '../web/src/pages/power-ups-chart.js';",
   "export { flowLanes } from '../web/src/pages/power-flow-anim.js';",
   "export { powerStats, defaultSep, EXPORT_STEPS } from '../web/src/pages/reports-power.js';",
@@ -113,6 +113,14 @@ assert.strictEqual(lanes({ mains_ok: true, charger_on: true, inverter_on: false,
   'mains:input>unit charge:unit>battery output:unit>output', 'an offline unit drew a bypass');
 assert.strictEqual(m.flowLanes({ down: false, flags: { mains_ok: true, output_on: true }, values: { load_pct: 250 } })[0].load, 1,
   'a load past 100 % is not capped');
+
+// ── OFFLINE OR ONLINE: AS THE UNIT SAYS, ELSE AS ITS MODEL ──────────────────
+// A Megatec UPS reports its kind; an offline one on the generic (online)
+// Megatec model is drawn offline. A Modbus unit says nothing: the model stands.
+assert.strictEqual(m.topologyOf({ topology: 'online', state: state({ topology: 'offline' }) }), 'offline',
+  'an offline Megatec UPS was drawn as its model says');
+assert.strictEqual(m.topologyOf({ topology: 'online', state: state({ topology: '' }) }), 'online', 'the model was ignored');
+assert.strictEqual(m.topologyOf({ topology: 'offline', state: null }), 'offline', 'a unit never read lost its model');
 
 // ── THE BATTERY BOX BY CHARGE ───────────────────────────────────────────────
 for (const [pct, tone] of [[100, 'ok'], [30, 'ok'], [29, 'warn'], [10, 'warn'], [9, 'down'], [0, 'down']] as [number, string][]) {

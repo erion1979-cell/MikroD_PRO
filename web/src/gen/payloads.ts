@@ -923,6 +923,7 @@ export interface PowerState {
   lastError: string;
   cause: string;
   open: PowerCond[];
+  topology: string;
 }
 
 export interface PPPSession {

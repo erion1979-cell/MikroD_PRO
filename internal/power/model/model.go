@@ -187,6 +187,9 @@ type Reading struct {
 	EventCode  int
 	EventText  string
 	Mode       Mode
+	// Topology is what the unit says it is, "offline" or "online"; empty when
+	// it does not say, and the model's then stands. A Megatec UPS says.
+	Topology string
 }
 
 // Decode turns one poll's registers into a Reading. regs[i] is the reply to
