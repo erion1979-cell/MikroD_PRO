@@ -2,6 +2,29 @@
 
 All notable changes to MikroDash will be documented in this file.
 
+## [0.8.71-pro.7] - Power/UPS reports, and exports for Excel
+
+Built on MikroDash 0.8.71, like 0.8.71-pro.6.
+
+### New
+
+- **A Reports tab on the Power/UPS page.** Pick a unit and a window - Last 24 hours, 7 or 30
+  days, today, this week or month, the previous week or month, or any From/To date and time - for
+  its outages, time on battery, faults, answered polls, input voltage, lowest battery, peak load
+  and events. It is the same report as the Reports page's Power/UPS tab.
+- **Exports made for Excel.** The history export takes an interval - one row per 1 minute,
+  5 minutes, 15 minutes, 1 hour or 1 day, each with the average, lowest and highest of every
+  value, hours and days on the local clock - and is written the way Excel reads it: `;` with
+  decimal commas or `,` with decimal points (chosen from the browser's language, changeable),
+  dates Excel recognises, and column titles with units.
+
+### Changed
+
+- **The export's column titles** now name the value and its unit ("Input voltage (V)" for
+  `input_v`, "Time (Europe/Tirane)" for `ts`); anything reading the old columns needs updating.
+- **The Mains input box is green while mains is normal**, as well as flashing red when it is
+  lost.
+
 ## [0.8.71-pro.6] - The power flow says how the output and battery are
 
 Built on MikroDash 0.8.71, like 0.8.71-pro.5.
