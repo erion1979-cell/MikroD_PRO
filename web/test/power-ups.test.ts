@@ -25,7 +25,7 @@ const say = console.log.bind(console);
 const ROOT = process.env.MIKRODASH_ROOT || path.join(__dirname, '..', '..');
 const ENTRY = path.join(ROOT, 'testdata', '.power-ups-entry.ts');
 fs.writeFileSync(ENTRY, [
-  "export { statusOf, statusLabel, ago, duration, eventLine, brandsOf, modelsOf, unitLabel } from '../web/src/pages/power-ups.js';",
+  "export { statusOf, statusLabel, ago, duration, eventLine, brandsOf, modelsOf, unitLabel, batteryTone } from '../web/src/pages/power-ups.js';",
   "export { withGaps } from '../web/src/pages/power-ups-chart.js';",
   "export { flowLanes } from '../web/src/pages/power-flow-anim.js';",
   "export { powerStats } from '../web/src/pages/reports-power.js';",
@@ -95,6 +95,12 @@ assert.strictEqual(lanes({ mains_ok: true, charger_on: true, inverter_on: true, 
   'a unit that is not answering shows movement');
 assert.strictEqual(m.flowLanes({ down: false, flags: { mains_ok: true, output_on: true }, values: { load_pct: 250 } })[0].load, 1,
   'a load past 100 % is not capped');
+
+// ── THE BATTERY BOX BY CHARGE ───────────────────────────────────────────────
+for (const [pct, tone] of [[100, 'ok'], [30, 'ok'], [29, 'warn'], [10, 'warn'], [9, 'down'], [0, 'down']] as [number, string][]) {
+  assert.strictEqual(m.batteryTone(pct), tone, pct + ' % is not ' + tone);
+}
+assert.strictEqual(m.batteryTone(undefined), '', 'a unit reporting no charge is coloured');
 
 // ── DURATIONS AND AGES ──────────────────────────────────────────────────────
 assert.strictEqual(m.duration(48_000), '48 s');

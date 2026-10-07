@@ -3884,6 +3884,10 @@
 @keyframes pw-pulse-border{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent-err) 55%,transparent)}
   50%{box-shadow:0 0 0 4px color-mix(in srgb,var(--accent-err) 25%,transparent)}}
 @keyframes pw-pulse-text{0%,100%{opacity:1}50%{opacity:.35}}
+/* The flow's boxes by state (power-ups.ts): output on / off, battery charge. */
+.pw-node-ok{border:2px solid var(--accent-ok)!important}
+.pw-node-warn{border:2px solid var(--accent-warn)!important}
+.pw-node-bad{border:2px solid var(--accent-err)!important}
 .pw-banner-down,.pw-node-down{border:2px solid var(--accent-err)!important;
   background:color-mix(in srgb,var(--accent-err) 10%,var(--bg-card));animation:pw-pulse-border 1.6s ease-in-out infinite}
 .pw-banner-down .pw-banner-title{color:var(--accent-err)}

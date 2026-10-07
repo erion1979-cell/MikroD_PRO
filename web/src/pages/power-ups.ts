@@ -110,6 +110,16 @@ export function statusLabel(u: Unit): string {
   return STATUS[s].label;
 }
 
+/**
+ * The battery box's colour by charge: green from 100 % to 30 %, amber from 29 %
+ * to 10 %, red and pulsing from 9 % down; none when the unit reports no charge.
+ */
+export function batteryTone(pct: number | undefined): 'ok' | 'warn' | 'down' | '' {
+  if (pct === undefined || pct === null || Number.isNaN(pct)) return '';
+  const p = Math.round(pct);
+  return p >= 30 ? 'ok' : p >= 10 ? 'warn' : 'down';
+}
+
 /** "Model - Brand" for the unit's box; the brand is its own span, which a phone hides. */
 export function unitLabel(u: Pick<Unit, 'modelName' | 'producerName'>): string {
   if (!u.modelName) return u.producerName ? esc(u.producerName) : 'Unit';
@@ -473,6 +483,10 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
     // Mains lost, as the unit reports it now: the Mains input box flashes red
     // like a silent unit. Not while stale - a silent unit's mains is unknown.
     const mainsLost = !stale && 'mains_ok' in f && !f.mains_ok;
+    // Output and battery borders, from the live reading only: green while the
+    // output is on, red while it is off; the battery by its charge (batteryTone).
+    const outTone = stale || !('output_on' in f) ? '' : f.output_on ? ' pw-node-ok' : ' pw-node-bad';
+    const batTone = stale ? '' : ({ ok: ' pw-node-ok', warn: ' pw-node-warn', down: ' pw-node-down', '': '' })[batteryTone(v.battery_pct)];
     const apparent = el('pwApparent')!;
     apparent.classList.toggle('pw-age-alert', down);
     apparent.textContent = stale
@@ -483,8 +497,8 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
       <div class="pw-arrow ${mainsOn ? 'is-on' : ''}"></div>
       <div class="pw-node pw-node-mid${down ? ' pw-node-down' : ''}" data-pwn="unit"><div class="pw-node-label" title="${esc(unitTitle(u))}">${unitLabel(u)}</div><div class="pw-node-v pw-tone-${s === 'mains' ? 'ok' : s === 'battery' ? 'warn' : 'bad'}">${esc(statusLabel(u))}</div><div class="pw-node-sub">DC bus ${fmt(v.dc_bus_a)} A</div></div>
       <div class="pw-arrow ${f.output_on && !stale ? 'is-on' : ''} ${s === 'fault' ? 'is-bad' : ''}"></div>
-      <div class="pw-node" data-pwn="output"><div class="pw-node-label">Output / load</div><div class="pw-node-v">${fmt(v.output_v)} V</div><div class="pw-node-sub">${fmt(v.output_a)} A · ${fmt(v.load_pct, 0)} %</div></div>
-      <div class="pw-battery-link ${fromBattery ? 'is-on' : mainsOn && f.charger_on ? 'is-charge' : ''}"><div class="pw-node" data-pwn="battery"><div class="pw-node-label">Battery</div><div class="pw-node-v">${fmt(v.battery_v)} V · ${fmt(v.battery_pct, 0)} %</div></div></div>`;
+      <div class="pw-node${outTone}" data-pwn="output"><div class="pw-node-label">Output / load</div><div class="pw-node-v">${fmt(v.output_v)} V</div><div class="pw-node-sub">${fmt(v.output_a)} A · ${fmt(v.load_pct, 0)} %</div></div>
+      <div class="pw-battery-link ${fromBattery ? 'is-on' : mainsOn && f.charger_on ? 'is-charge' : ''}"><div class="pw-node${batTone}" data-pwn="battery"><div class="pw-node-label">Battery</div><div class="pw-node-v">${fmt(v.battery_v)} V · ${fmt(v.battery_pct, 0)} %</div></div></div>`;
 
     // The particles along those lines, from the same status bits.
     flowAnim.set(flowLanes({ down: stale, flags: f, values: v }));
