@@ -2,6 +2,30 @@
 
 All notable changes to MikroDash will be documented in this file.
 
+## [0.8.71-pro.5] - The HSI series, and a unit remembered across restarts
+
+Built on MikroDash 0.8.71, like 0.8.71-pro.4.
+
+### New
+
+- **PowerGuard HSI hybrid solar series:** HSI-351, HSI-501, HSI-601, HSI-801, HSI-102 and
+  HSI-122 in the Model list, each with its technical details behind the **?**. They read on
+  Modbus protocol V1.1 like the rest of the range, which has no solar panel registers, so PV
+  input is not shown yet.
+- **The Mains input box flashes red when mains is lost**, with the same pulsing border as a unit
+  that is not responding.
+
+### Fixed
+
+- **A unit's last reading survives a restart.** An inverter that stayed silent after the
+  container was restarted or rebuilt showed "No reading yet", though it had answered before. Its
+  last good reading is now kept (a new table, applied automatically on start), so it shows
+  "Last reading 3 h ago" and its last known values. Until it answers again it reads
+  "Connecting…" rather than live. A unit already silent when this version is installed has no
+  kept reading until it answers once.
+- **The ? beside Model stays open** while you switch brand or model, showing each model's
+  details; only a second click closes it.
+
 ## [0.8.71-pro.4] - MikroDash asks its own questions
 
 Built on MikroDash 0.8.71, like 0.8.71-pro.3.
