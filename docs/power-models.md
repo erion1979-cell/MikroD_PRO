@@ -55,6 +55,37 @@ The map itself stays in the Model list as "Other model (Modbus protocol V1.1)", 
 product is not listed yet. Only write a new map, as below, for a product that does **not** speak
 its brand's existing protocol.
 
+## A UPS that speaks Megatec
+
+A Megatec UPS needs no register map: the protocol fixes what it reports. Its file says
+`"protocol": "megatec"` and nothing about registers. `defs/powerguard/megatec.json` is the map
+("Other UPS (Megatec protocol)"), and a product of it is a short file like any other:
+
+```json
+{
+  "producer": "powerguard",
+  "producerName": "PowerGuard",
+  "model": "ups-3k",
+  "modelName": "UPS-3K",
+  "kind": "ups",
+  "uses": "megatec",
+  "details": ["Online, double conversion", "3 kVA / 2.7 kW"]
+}
+```
+
+- **It takes the map's `"topology": "online"`.** Give a standby (offline or line-interactive)
+  product `"topology": "offline"` so the page draws it without Charger and Inverter boxes.
+- **What is read:** input and output voltage, load %, input frequency, battery voltage,
+  temperature, and the status bits: mains failed, battery low, bypass, UPS failed, test in
+  progress, shutdown pending. Battery voltage is sized from the UPS's rating line.
+- **What is estimated:** battery %, from the battery voltage (the page says "estimated"). Megatec
+  does not report it. The UPS's own battery-low bit also raises "Battery low".
+- **Connection:** the UPS's RS232 port into a serial-to-Ethernet converter in **transparent mode**
+  (not a Modbus gateway), usually 2400 8N1, **one UPS per converter**. The form hides Slave ID for
+  it. MikroDash sends only the two read commands, Q1 and F, never the test or shutdown ones.
+- **Check it:** `powerprobe -host <converter> -port <port> -model powerguard/megatec -raw` prints
+  every value and the UPS's raw lines.
+
 ## A new brand, or a new register map
 
 1. **Copy the existing map.** Start from `internal/power/model/defs/powerguard/modbus-v1.1.json`. It
@@ -72,6 +103,7 @@ its brand's existing protocol.
    | `modelName` | the model as people write it | the **Model** list |
    | `kind` | `"inverter"` or `"ups"` | - |
    | `serial` | the RS485 settings, e.g. `"9600 8N1"` | the unit's page |
+   | `protocol` | `"modbus"` (the default) or `"megatec"`, as above | - |
    | `topology` | `"offline"` (the default) or `"online"`, as above | the unit's power flow |
    | `details` | optional technical details, one line each | the form's **?** |
 

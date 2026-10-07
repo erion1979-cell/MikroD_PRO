@@ -169,6 +169,8 @@ type powerUnitView struct {
 	// Topology is the model's, "offline" or "online", and decides how the page
 	// draws the power flow; empty for a model this build does not have.
 	Topology string `json:"topology"`
+	// Protocol is "modbus" or "megatec"; a Megatec unit has no slave ID.
+	Protocol string `json:"protocol"`
 	CanWrite bool   `json:"canWrite"`
 	// State is nil when nothing polls the unit: disabled, -no-pool, or a model
 	// this build does not have.
@@ -183,6 +185,9 @@ type powerModelView struct {
 	ProducerName string `json:"producerName"`
 	ModelName    string `json:"modelName"`
 	Kind         string `json:"kind"`
+	// Protocol is "modbus" or "megatec": the form asks a slave ID only for
+	// Modbus.
+	Protocol string `json:"protocol"`
 	// Details are the product's technical details, for the form's "?".
 	Details []string `json:"details"`
 	// Default is the model a new unit starts on in the form.
@@ -226,7 +231,7 @@ func (s *Server) powerList(w http.ResponseWriter, r *http.Request) {
 		}
 		v := powerUnitView{PowerUnit: u, CanWrite: s.powerMay(sess, "write", siteOf(u))}
 		if m := model.ByID(u.Model); m != nil {
-			v.ProducerName, v.ModelName, v.Serial, v.Topology = m.ProducerName, m.ModelName, m.Serial, m.Topology
+			v.ProducerName, v.ModelName, v.Serial, v.Topology, v.Protocol = m.ProducerName, m.ModelName, m.Serial, m.Topology, m.Protocol
 		}
 		if st, ok := states[u.ID]; ok {
 			sv := powerStateView(st)
@@ -255,7 +260,7 @@ func (s *Server) powerList(w http.ResponseWriter, r *http.Request) {
 	all, _ := model.All()
 	for _, m := range all {
 		models = append(models, powerModelView{ID: m.ID(), Producer: m.Producer, ProducerName: m.ProducerName,
-			ModelName: m.ModelName, Kind: m.Kind, Details: append([]string{}, m.Details...), Default: m.Default})
+			ModelName: m.ModelName, Kind: m.Kind, Protocol: m.Protocol, Details: append([]string{}, m.Details...), Default: m.Default})
 	}
 
 	// WHERE THE CALLER MAY ADD OR MOVE A UNIT: the sites they hold write on,
@@ -330,8 +335,13 @@ func (s *Server) powerValidate(b powerUnitBody) (db.PowerUnit, string) {
 	if u.Name == "" || len(u.Name) > 64 {
 		return u, "Name must be 1 to 64 characters"
 	}
-	if model.ByID(u.Model) == nil {
+	mdl := model.ByID(u.Model)
+	if mdl == nil {
 		return u, "Choose a model"
+	}
+	if mdl.Protocol == "megatec" {
+		// Megatec has no address; the form does not ask, and 1 is stored.
+		u.SlaveID = 1
 	}
 	if net.ParseIP(u.Host) == nil && !reHostname.MatchString(u.Host) {
 		return u, "Enter the converter's IP address, e.g. 192.168.20.83"
@@ -366,14 +376,18 @@ func (s *Server) powerValidate(b powerUnitBody) (db.PowerUnit, string) {
 	return u, ""
 }
 
-// powerClash finds another unit already at this converter and slave id.
+// powerClash finds another unit already at this converter with this slave id,
+// or at all when either is a Megatec UPS, which has a converter to itself:
+// RS232 is point to point and Megatec carries no address.
 func (s *Server) powerClash(u db.PowerUnit) (string, error) {
 	rows, err := s.auditDB.PowerUnits()
 	if err != nil {
 		return "", err
 	}
+	alone := func(id string) bool { m := model.ByID(id); return m != nil && m.Protocol == "megatec" }
 	for _, o := range rows {
-		if o.ID != u.ID && strings.EqualFold(o.Host, u.Host) && o.Port == u.Port && o.SlaveID == u.SlaveID {
+		if o.ID != u.ID && strings.EqualFold(o.Host, u.Host) && o.Port == u.Port &&
+			(o.SlaveID == u.SlaveID || alone(o.Model) || alone(u.Model)) {
 			return o.Name, nil
 		}
 	}
@@ -403,7 +417,7 @@ func (s *Server) powerCheckClash(w http.ResponseWriter, u db.PowerUnit) bool {
 	}
 	if other != "" {
 		writeJSONErr(w, http.StatusConflict, other+" already uses this converter and slave ID: "+
-			"each unit on one converter needs its own slave ID")
+			"each unit on one converter needs its own slave ID, and a Megatec UPS needs a converter of its own")
 		return false
 	}
 	return true

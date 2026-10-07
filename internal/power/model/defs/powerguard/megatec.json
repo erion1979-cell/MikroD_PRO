@@ -1,0 +1,10 @@
+{
+  "producer": "powerguard",
+  "producerName": "PowerGuard",
+  "model": "megatec",
+  "modelName": "Other UPS (Megatec protocol)",
+  "kind": "ups",
+  "protocol": "megatec",
+  "topology": "online",
+  "serial": "2400 8N1"
+}

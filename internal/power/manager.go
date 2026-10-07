@@ -8,7 +8,9 @@ package power
 // connects, and the serial line behind it carries one request at a time. So
 // every unit behind one address (host:port) is polled by ONE goroutine over ONE
 // connection, one unit after another. Several units on one converter only work
-// when their Modbus slave ids differ, which is the operator's to arrange.
+// when their Modbus slave ids differ, which is the operator's to arrange. A
+// Megatec UPS has no address, so its converter serves it alone; the API
+// refuses a second unit there.
 //
 // ── STATE OUTLIVES THE GOROUTINES ───────────────────────────────────────────
 //
@@ -25,10 +27,12 @@ package power
 // stall another converter's poll.
 
 import (
+	"errors"
 	"sort"
 	"sync"
 	"time"
 
+	"mikrodash/internal/power/megatec"
 	"mikrodash/internal/power/modbus"
 	"mikrodash/internal/power/model"
 	"mikrodash/internal/safe"
@@ -39,6 +43,17 @@ type Reader interface {
 	Read(unit byte, fn modbus.Function, start, count uint16) ([]uint16, error)
 	Close() error
 }
+
+// Querier is the one Megatec call a poll needs. *megatec.Client implements it.
+type Querier interface {
+	Query(c megatec.Command) (string, error)
+	Close() error
+}
+
+// ratingTries is how many polls ask a Megatec UPS for its rating before giving
+// up on one that never answers it: the rating only sizes the battery, and each
+// unanswered ask costs a timeout and a reconnect.
+const ratingTries = 3
 
 // Unit is one inverter or UPS to poll.
 type Unit struct {
@@ -119,7 +134,9 @@ const keepEvery = 60_000
 type Manager struct {
 	hooks Hooks
 	dial  func(addr string, timeout time.Duration) Reader
-	now   func() time.Time
+	// dialMegatec is dial for a converter whose unit speaks Megatec.
+	dialMegatec func(addr string, timeout time.Duration) Querier
+	now         func() time.Time
 
 	mu       sync.Mutex
 	settings Settings
@@ -129,9 +146,16 @@ type Manager struct {
 }
 
 type gateway struct {
-	addr   string
-	units  []Unit
-	client Reader
+	addr  string
+	units []Unit
+	// client and megatec are the connection in each protocol, made when the
+	// goroutine starts for whichever its units use.
+	client  Reader
+	megatec Querier
+	// rating is each Megatec unit's rating line, asked until it is known or
+	// ratingTries polls have failed to get it. Only this goroutine touches it.
+	rating map[string]*megatec.Rating
+	asked  map[string]int
 	stop   chan struct{}
 	done   chan struct{}
 }
@@ -153,6 +177,9 @@ func NewManager(h Hooks, s Settings) *Manager {
 		hooks: h,
 		dial: func(addr string, timeout time.Duration) Reader {
 			return modbus.New(addr, timeout)
+		},
+		dialMegatec: func(addr string, timeout time.Duration) Querier {
+			return megatec.New(addr, timeout)
 		},
 		now:      time.Now,
 		settings: s,
@@ -296,8 +323,17 @@ func (m *Manager) run(g *gateway) {
 	m.mu.Lock()
 	interval, timeout := m.settings.Interval, m.settings.Timeout
 	m.mu.Unlock()
-	g.client = m.dial(g.addr, timeout)
-	defer g.client.Close()
+	for _, u := range g.units {
+		switch {
+		case u.Model.Protocol == "megatec" && g.megatec == nil:
+			g.megatec = m.dialMegatec(g.addr, timeout)
+			defer g.megatec.Close()
+		case u.Model.Protocol != "megatec" && g.client == nil:
+			g.client = m.dial(g.addr, timeout)
+			defer g.client.Close()
+		}
+	}
+	g.rating, g.asked = map[string]*megatec.Rating{}, map[string]int{}
 
 	tick := time.NewTicker(interval)
 	defer tick.Stop()
@@ -319,7 +355,7 @@ func (m *Manager) pollGateway(g *gateway) {
 			return
 		default:
 		}
-		m.pollUnit(g.client, u)
+		m.pollUnit(g, u)
 	}
 }
 
@@ -334,7 +370,7 @@ type unitMinute struct {
 	m  Minute
 }
 
-func (m *Manager) pollUnit(c Reader, u Unit) {
+func (m *Manager) pollUnit(g *gateway, u Unit) {
 	m.mu.Lock()
 	us := m.units[u.ID]
 	m.mu.Unlock()
@@ -350,18 +386,12 @@ func (m *Manager) pollUnit(c Reader, u Unit) {
 	}
 
 	began := m.now()
-	regs := make([][]uint16, 0, len(u.Model.Reads))
-	var err error
-	for _, r := range u.Model.Reads {
-		var got []uint16
-		if got, err = c.Read(u.Slave, r.Function, r.Start, r.Count); err != nil {
-			break
-		}
-		regs = append(regs, got)
-	}
 	var reading model.Reading
-	if err == nil {
-		reading, err = u.Model.Decode(regs)
+	var err error
+	if u.Model.Protocol == "megatec" {
+		reading, err = readMegatec(g, u)
+	} else {
+		reading, err = readModbus(g.client, u)
 	}
 	at := m.now()
 	ms := at.UnixMilli()
@@ -411,6 +441,47 @@ func (m *Manager) pollUnit(c Reader, u Unit) {
 	if m.hooks.State != nil {
 		m.hooks.State(snap)
 	}
+}
+
+// readModbus reads a unit's registers and decodes them.
+func readModbus(c Reader, u Unit) (model.Reading, error) {
+	regs := make([][]uint16, 0, len(u.Model.Reads))
+	for _, r := range u.Model.Reads {
+		got, err := c.Read(u.Slave, r.Function, r.Start, r.Count)
+		if err != nil {
+			return model.Reading{}, err
+		}
+		regs = append(regs, got)
+	}
+	return u.Model.Decode(regs)
+}
+
+// readMegatec asks a UPS for its status, and for its rating until that is
+// known: the rating never changes, so it is asked once per connection run.
+func readMegatec(g *gateway, u Unit) (model.Reading, error) {
+	line, err := g.megatec.Query(megatec.QueryStatus)
+	if err != nil {
+		return model.Reading{}, err
+	}
+	st, err := megatec.ParseStatus(line)
+	if err != nil {
+		return model.Reading{}, err
+	}
+	if g.rating[u.ID] == nil && g.asked[u.ID] < ratingTries {
+		g.asked[u.ID]++
+		line, err := g.megatec.Query(megatec.QueryRating)
+		var r megatec.Rating
+		if err == nil {
+			r, err = megatec.ParseRating(line)
+		}
+		switch {
+		case err == nil:
+			g.rating[u.ID] = &r
+		case errors.Is(err, megatec.ErrUnsupported):
+			g.asked[u.ID] = ratingTries
+		}
+	}
+	return u.Model.FromMegatec(st, g.rating[u.ID]), nil
 }
 
 // adopt creates a unit's state, unless another poll got there first. Caller

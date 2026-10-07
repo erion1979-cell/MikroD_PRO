@@ -141,6 +141,18 @@ func TestBatteryLowOnlyCountsOnBattery(t *testing.T) {
 		"-battery_low@9000(8000) -mains_lost@9000(3000)")
 }
 
+// A UNIT'S OWN BATTERY-LOW BIT IS BELIEVED, on mains too, whatever the
+// estimated percentage says.
+func TestTheUnitsOwnBatteryLowBitIsBelieved(t *testing.T) {
+	tr := NewTracker()
+	r := reading(t, nil)
+	tr.Success(r, 1000)
+	r.Flags["battery_low"] = true
+	expect(t, "bit set", tr.Success(r, 2000), "+battery_low@2000")
+	r.Flags["battery_low"] = false
+	expect(t, "bit clear", tr.Success(r, 3000), "-battery_low@3000(2000)")
+}
+
 func TestTheThresholdIsTheTrackersSetting(t *testing.T) {
 	tr := NewTracker()
 	tr.BatteryLowPct = 40

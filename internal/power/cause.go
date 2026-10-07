@@ -4,15 +4,15 @@ package power
 //
 // ── TWO DEVICES, ONE SILENCE ────────────────────────────────────────────────
 //
-// A unit is read through an Ethernet-to-RS485 converter, and either can be the
+// A unit is read through a serial-to-Ethernet converter, and either can be the
 // one that is off. The reply tells them apart:
 //
 //   - no TCP connection to the converter at all: the CONVERTER is off,
 //     unplugged or unreachable, whatever the unit behind it is doing;
-//   - connected, but no reply before the timeout, or the converter's own
-//     exception 0A/0B ("gateway path unavailable", "target device failed to
-//     respond"): the converter is up and the UNIT is silent - switched off,
-//     or its RS485 wiring is broken.
+//   - connected, but no reply before the timeout (Modbus or Megatec), or a
+//     Modbus converter's own exception 0A/0B ("gateway path unavailable",
+//     "target device failed to respond"): the converter is up and the UNIT is
+//     silent - switched off, or its serial wiring is broken.
 //
 // Anything else (a malformed frame, another exception, a reset connection)
 // names neither, and is reported as plain "not responding".
@@ -26,6 +26,7 @@ import (
 	"errors"
 	"net"
 
+	"mikrodash/internal/power/megatec"
 	"mikrodash/internal/power/modbus"
 )
 
@@ -44,7 +45,8 @@ const (
 // CauseOf classifies a poll's error.
 func CauseOf(err error) Cause {
 	var conn *modbus.ConnectError
-	if errors.As(err, &conn) {
+	var mconn *megatec.ConnectError
+	if errors.As(err, &conn) || errors.As(err, &mconn) {
 		return CauseConverter
 	}
 	var exc *modbus.ExceptionError

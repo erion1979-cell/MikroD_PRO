@@ -197,6 +197,7 @@
             <button type="button" class="pw-info-btn" id="pwf_infoBtn" aria-expanded="false" aria-controls="pwf_info" title="How to set up the converter">&#9432;</button>
           </div>
           <div class="pw-info" id="pwf_info" hidden>
+            <div id="pwf_infoModbus">
             <p><b>Any Ethernet-to-RS485 converter works</b> if it runs as a <b>Modbus TCP gateway</b> (Modbus TCP &harr; RTU). MikroDash only needs its IP address and port; the make does not matter. Plain transparent mode (raw serial over TCP) does <b>not</b> work.</p>
             <ul>
               <li><b>Serial side:</b> 9600 baud, 8 data bits, no parity, 1 stop bit (9600 8N1).</li>
@@ -207,6 +208,19 @@
               <li><b>Several units on one converter</b> need different slave IDs, set on each unit.</li>
               <li><b>Security:</b> Modbus has no password. Keep converters on their own VLAN or firewall them so only MikroDash reaches port 502, block the setup ports (E30: UDP 8168, ZLAN: UDP 1092), change the web passwords, and never forward Modbus to the internet.</li>
             </ul>
+            </div>
+            <!-- A Megatec UPS: RS232, transparent mode, one UPS per converter. -->
+            <div id="pwf_infoMegatec" hidden>
+            <p><b>Any serial-to-Ethernet converter with an RS232 port works</b> if it runs in <b>transparent mode</b> (raw serial over TCP, "TCP Server"). MikroDash only needs its IP address and port. The Modbus gateway mode must be <b>off</b>.</p>
+            <ul>
+              <li><b>Serial side:</b> RS232, 2400 baud, 8 data bits, no parity, 1 stop bit (2400 8N1), unless the UPS manual says otherwise.</li>
+              <li><b>Network side:</b> TCP server on any port (enter it below), static IP address on the site LAN.</li>
+              <li><b>One UPS per converter:</b> Megatec has no address, so there is no slave ID.</li>
+              <li><b>Cable:</b> the UPS's RS232 (DB9) port to the converter's RS232 port; transmit, receive and ground are enough. Check the UPS manual for a straight or crossed cable.</li>
+              <li><b>ZLAN 5143, 7104, 7144:</b> work mode TCP Server, conversion protocol <b>None</b> (transparent).</li>
+              <li><b>Security:</b> the protocol has no password and the same port accepts shutdown commands (MikroDash never sends them). Keep converters on their own VLAN or firewall them so only MikroDash reaches them, and never forward the port to the internet.</li>
+            </ul>
+            </div>
           </div>
           <div class="sform-row">
             <div>
@@ -218,7 +232,7 @@
                 <label class="sform-label" for="pwf_port">Port</label>
                 <input class="sform-input" id="pwf_port" type="number" min="1" max="65535" value="502">
               </div>
-              <div>
+              <div id="pwf_slaveWrap">
                 <label class="sform-label" for="pwf_slave">Slave ID</label>
                 <input class="sform-input" id="pwf_slave" type="number" min="1" max="247" value="1">
               </div>

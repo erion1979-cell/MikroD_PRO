@@ -10,7 +10,9 @@
 // it.
 //
 // The converter in front of the unit must run as a Modbus TCP gateway; its make
-// does not matter (docs/inverter/converters.md).
+// does not matter (docs/inverter/converters.md). For a Megatec UPS
+// (-model powerguard/megatec) it runs in transparent mode instead, and the probe
+// sends only the two read commands, Q1 and F (internal/power/megatec).
 //
 //	docker run --rm --network host -v "$PWD":/src -w /src golang:1.27-alpine \
 //	  go run ./cmd/powerprobe -host 192.168.20.83
@@ -30,6 +32,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"flag"
 	"fmt"
 	"net"
@@ -41,6 +44,7 @@ import (
 	"time"
 
 	"mikrodash/internal/power"
+	"mikrodash/internal/power/megatec"
 	"mikrodash/internal/power/modbus"
 	"mikrodash/internal/power/model"
 )
@@ -53,18 +57,22 @@ func main() {
 	count := flag.Int("count", 1, "polls to make; 0 polls until Ctrl-C")
 	interval := flag.Duration("interval", 5*time.Second, "time between polls (not under 1s)")
 	timeout := flag.Duration("timeout", 2*time.Second, "reply timeout")
-	raw := flag.Bool("raw", false, "also print every register as read")
+	raw := flag.Bool("raw", false, "also print every register (or Megatec line) as read")
 	list := flag.Bool("models", false, "list the model definitions this build has, and exit")
 	flag.Parse()
 	if flag.NFlag() == 0 {
 		interactive = true
 		in := bufio.NewReader(os.Stdin)
 		fmt.Println("MikroDash Power/UPS probe - reads one unit, never writes to it.")
-		fmt.Println("The converter must be in Modbus TCP gateway mode.")
 		fmt.Println()
+		if askInt(in, "Protocol: 1 = Modbus inverter (gateway mode), 2 = Megatec UPS (transparent mode)", 1) == 2 {
+			*modelID = "powerguard/megatec"
+		}
 		*host = ask(in, "Converter IP address", "")
 		*port = askInt(in, "Port", 502)
-		*slave = askInt(in, "Slave ID", 1)
+		if *modelID != "powerguard/megatec" {
+			*slave = askInt(in, "Slave ID", 1)
+		}
 		*count = 0
 		fmt.Println("\nPolling every 5 seconds. Close this window (or press Ctrl-C) to stop.")
 		fmt.Println()
@@ -95,10 +103,19 @@ func main() {
 	}
 
 	addr := net.JoinHostPort(*host, strconv.Itoa(*port))
-	client := modbus.New(addr, *timeout)
-	defer client.Close()
+	var read reader
+	if mdl.Protocol == "megatec" {
+		client := megatec.New(addr, *timeout)
+		defer client.Close()
+		read = megatecReader(client, mdl)
+		fmt.Printf("Polling %s as %s %s (Megatec). Read-only.\n\n", addr, mdl.ProducerName, mdl.ModelName)
+	} else {
+		client := modbus.New(addr, *timeout)
+		defer client.Close()
+		read = modbusReader(client, mdl, byte(*slave))
+		fmt.Printf("Polling %s, slave %d, as %s %s. Read-only.\n\n", addr, *slave, mdl.ProducerName, mdl.ModelName)
+	}
 	tracker := power.NewTracker()
-	fmt.Printf("Polling %s, slave %d, as %s %s. Read-only.\n\n", addr, *slave, mdl.ProducerName, mdl.ModelName)
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)
@@ -110,28 +127,94 @@ func main() {
 			case <-time.After(*interval):
 			}
 		}
-		poll(client, mdl, byte(*slave), tracker, *raw)
+		poll(read, tracker, *raw)
 	}
 }
 
-func poll(c *modbus.Client, mdl *model.Model, slave byte, tr *power.Tracker, raw bool) {
+// reader takes one reading, with what it read as text lines for -raw. A
+// failure to get a reply is a plain error; one to make sense of it is
+// errUndecodable.
+type reader func() (model.Reading, []string, error)
+
+type errUndecodable struct{ error }
+
+func modbusReader(c *modbus.Client, mdl *model.Model, slave byte) reader {
+	return func() (model.Reading, []string, error) {
+		regs := make([][]uint16, 0, len(mdl.Reads))
+		for _, r := range mdl.Reads {
+			got, err := c.Read(slave, r.Function, r.Start, r.Count)
+			if err != nil {
+				return model.Reading{}, nil, err
+			}
+			regs = append(regs, got)
+		}
+		var lines []string
+		for i, rd := range mdl.Reads {
+			lines = append(lines, fmt.Sprintf("raw fn%02d from %d: %v", rd.Function, rd.Start, regs[i]))
+		}
+		r, err := mdl.Decode(regs)
+		if err != nil {
+			return r, lines, errUndecodable{err}
+		}
+		return r, lines, nil
+	}
+}
+
+// megatecReader asks Q1 each poll, and F until the UPS answers it or says it
+// cannot, as the server does.
+func megatecReader(c *megatec.Client, mdl *model.Model) reader {
+	var rating *megatec.Rating
+	ratingDone := false
+	return func() (model.Reading, []string, error) {
+		line, err := c.Query(megatec.QueryStatus)
+		if err != nil {
+			return model.Reading{}, nil, err
+		}
+		lines := []string{"Q1 -> " + line}
+		st, err := megatec.ParseStatus(line)
+		if err != nil {
+			return model.Reading{}, lines, errUndecodable{err}
+		}
+		if !ratingDone {
+			f, err := c.Query(megatec.QueryRating)
+			switch {
+			case err == nil:
+				lines = append(lines, "F  -> "+f)
+				if r, err := megatec.ParseRating(f); err == nil {
+					rating = &r
+				} else {
+					lines = append(lines, "F  not understood: "+err.Error())
+				}
+				ratingDone = true
+			case errors.Is(err, megatec.ErrUnsupported):
+				lines = append(lines, "F  not supported by this UPS: no battery size")
+				ratingDone = true
+			default:
+				lines = append(lines, "F  no reply: "+err.Error())
+			}
+		}
+		lines = append(lines, fmt.Sprintf("status bits %08b", st.Bits))
+		return mdl.FromMegatec(st, rating), lines, nil
+	}
+}
+
+func poll(read reader, tr *power.Tracker, raw bool) {
 	began := time.Now()
 	stamp := began.Format("15:04:05")
-	regs := make([][]uint16, 0, len(mdl.Reads))
-	for _, r := range mdl.Reads {
-		got, err := c.Read(slave, r.Function, r.Start, r.Count)
-		if err != nil {
-			fmt.Printf("%s  NO READING: %v\n", stamp, err)
-			report(tr.Failure(began.UnixMilli(), power.CauseOf(err)))
-			return
-		}
-		regs = append(regs, got)
-	}
+	r, lines, err := read()
 	reply := time.Since(began)
-	r, err := mdl.Decode(regs)
-	if err != nil {
-		fmt.Printf("%s  UNDECODABLE: %v\n", stamp, err)
+	var bad errUndecodable
+	switch {
+	case errors.As(err, &bad):
+		fmt.Printf("%s  UNDECODABLE: %v\n", stamp, bad.error)
+		for _, l := range lines {
+			fmt.Printf("    %s\n", l)
+		}
 		report(tr.Failure(began.UnixMilli(), power.CauseUnknown))
+		return
+	case err != nil:
+		fmt.Printf("%s  NO READING: %v\n", stamp, err)
+		report(tr.Failure(began.UnixMilli(), power.CauseOf(err)))
 		return
 	}
 
@@ -161,8 +244,8 @@ func poll(c *modbus.Client, mdl *model.Model, slave byte, tr *power.Tracker, raw
 		}
 	}
 	if raw {
-		for i, rd := range mdl.Reads {
-			fmt.Printf("    raw fn%02d from %d: %v\n", rd.Function, rd.Start, regs[i])
+		for _, l := range lines {
+			fmt.Printf("    %s\n", l)
 		}
 	}
 	report(tr.Success(r, began.UnixMilli()))

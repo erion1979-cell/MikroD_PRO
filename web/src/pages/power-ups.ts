@@ -45,12 +45,16 @@ export interface Unit {
   serial: string;
   /** "online" draws the flow through a Charger and an Inverter; else offline. */
   topology: string;
+  /** "megatec" is a UPS alone on its converter, with no slave ID. */
+  protocol: string;
   canWrite: boolean;
   state: UnitState | null;
 }
 
 export interface ModelInfo {
   id: string; producer: string; producerName: string; modelName: string; kind: string; details: string[];
+  /** "modbus" or "megatec": the form asks a slave ID only for Modbus. */
+  protocol: string;
   /** The model a new unit starts on. */
   default: boolean;
 }
@@ -291,7 +295,7 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
         return {
           unit: u, name: u.name, site: siteName(u.siteId), status: STATUS[statusOf(u)].rank,
           input: v.input_v ?? null, output: v.output_v ?? null, load: v.load_pct ?? null,
-          battery: v.battery_pct ?? null, converter: u.host + ':' + u.port + ' #' + u.slaveId,
+          battery: v.battery_pct ?? null, converter: u.host + ':' + u.port + (u.protocol === 'megatec' ? '' : ' #' + u.slaveId),
           last: u.state?.lastOk ?? 0,
         };
       });
@@ -519,6 +523,9 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
     } else if (s === 'down' && st?.cause === 'converter') {
       sub = 'No connection to the converter at ' + u.host + ':' + u.port +
         ' - it is off, unplugged or off the network. The inverter behind it cannot be seen.';
+    } else if (s === 'down' && st?.cause === 'unit' && u.protocol === 'megatec') {
+      sub = 'The converter at ' + u.host + ':' + u.port + ' answers, but the UPS does not: it is switched off, ' +
+        'its RS232 cable is unplugged, or the converter is not in transparent mode at the UPS\'s baud rate.';
     } else if (s === 'down' && st?.cause === 'unit') {
       sub = 'The converter at ' + u.host + ':' + u.port + ' answers, but the inverter (slave ' + u.slaveId +
         ') does not: it is switched off, or its RS485 wiring is broken.';
@@ -557,6 +564,9 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
         <div class="pw-sub${chargerOn ? ' is-on pw-track-charge' : ''}" data-pwn="charger">Charger</div>
         <div class="pw-sub${inverterOn ? ' is-on ' + (mainsOn ? 'pw-track-dc' : 'pw-track-bat') : ''}" data-pwn="inverter">Inverter</div></div>`;
     const linkCls = online ? 'is-online' : fromBattery ? 'is-on' : mainsOn && f.charger_on ? 'is-charge' : '';
+    // A Megatec UPS reports no percentage: MikroDash estimates it from the
+    // battery voltage (internal/power/model/megatec.go), and says so.
+    const estimated = u.protocol === 'megatec';
     const apparent = el('pwApparent')!;
     apparent.classList.toggle('pw-age-alert', down);
     apparent.textContent = stale
@@ -568,7 +578,7 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
       <div class="pw-node pw-node-mid${down ? ' pw-node-down' : ''}" data-pwn="unit"><div class="pw-node-label" title="${esc(unitTitle(u))}">${unitLabel(u)}</div><div class="pw-node-v pw-tone-${s === 'mains' && !bypass ? 'ok' : s === 'battery' || bypass ? 'warn' : 'bad'}">${esc(bypass ? 'On bypass' : statusLabel(u))}</div><div class="pw-node-sub">DC bus ${fmt(v.dc_bus_a)} A</div>${subs}</div>
       <div class="pw-arrow ${f.output_on && !stale ? 'is-on' : ''} ${s === 'fault' ? 'is-bad' : ''}${bypass && f.output_on ? ' is-bypass' : ''}"></div>
       <div class="pw-node${outTone}" data-pwn="output"><div class="pw-node-label">Output / load</div><div class="pw-node-v">${fmt(v.output_v)} V</div><div class="pw-node-sub">${fmt(v.output_a)} A · ${fmt(v.load_pct, 0)} %</div></div>
-      <div class="pw-battery-link ${linkCls}"><div class="pw-node${batTone}" data-pwn="battery"><div class="pw-node-label">Battery</div><div class="pw-node-v">${fmt(v.battery_v)} V · ${fmt(v.battery_pct, 0)} %</div></div></div>`;
+      <div class="pw-battery-link ${linkCls}"><div class="pw-node${batTone}" data-pwn="battery"><div class="pw-node-label">Battery</div><div class="pw-node-v">${fmt(v.battery_v)} V · ${estimated ? '~' : ''}${fmt(v.battery_pct, 0)} %</div></div></div>`;
 
     // The particles along those lines, from the same status bits.
     flowAnim.set(flowLanes({ down: stale, topology: u.topology, flags: f, values: v }));
@@ -576,7 +586,7 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
     // Battery: % is voltage-based and reads high while charging, so the
     // voltage stands beside it.
     const pct = v.battery_pct;
-    el('pwBatPct')!.innerHTML = pct === undefined ? '—' : fmt(pct, 0) + '<small> %</small>';
+    el('pwBatPct')!.innerHTML = pct === undefined ? '—' : fmt(pct, 0) + '<small> %' + (estimated ? ' estimated' : '') + '</small>';
     const bar = el('pwBatBar');
     if (bar) {
       bar.style.width = pct === undefined ? '0' : Math.max(0, Math.min(100, pct)) + '%';
@@ -601,7 +611,8 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
     const router = u.routerId ? routers.find((r) => r.id === u.routerId) : undefined;
     el('pwConn')!.innerHTML = '<b>Connection</b>' + [
       ['Converter', u.host + ':' + u.port + (!down ? '' : st?.cause === 'converter' ? ' (unreachable)'
-        : st?.cause === 'unit' ? ' (answering)' : '')], ['Slave ID', String(u.slaveId)], ['RS485', u.serial || '—'],
+        : st?.cause === 'unit' ? ' (answering)' : '')], ...(u.protocol === 'megatec' ? [['Protocol', 'Megatec'], ['RS232', u.serial || '—']]
+        : [['Slave ID', String(u.slaveId)], ['RS485', u.serial || '—']]),
       ['Reply time', st?.answered ? Math.round(st.replyMs) + ' ms' : '—'],
       ['Success', success == null ? '—' : success + ' %'],
       ['Model', (u.producerName + ' ' + u.modelName).trim() || u.model],
@@ -684,7 +695,14 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
    * sees each one's as they pick it. The form opens with them closed.
    */
   function drawModelInfo(): void {
-    const details = data.models.find((m) => m.id === input<HTMLSelectElement>('pwf_model').value)?.details || [];
+    const chosen = data.models.find((m) => m.id === input<HTMLSelectElement>('pwf_model').value);
+    // A Megatec UPS has its converter to itself and no slave ID, and its
+    // converter is set up differently: the ⓘ shows the matching instructions.
+    const megatec = chosen?.protocol === 'megatec';
+    el('pwf_slaveWrap')!.hidden = megatec;
+    el('pwf_infoModbus')!.hidden = megatec;
+    el('pwf_infoMegatec')!.hidden = !megatec;
+    const details = chosen?.details || [];
     const box = el('pwf_modelInfo')!;
     box.classList.toggle('is-empty', !details.length);
     box.innerHTML = details.length

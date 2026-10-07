@@ -2,10 +2,12 @@ package power
 
 import (
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"mikrodash/internal/power/megatec"
 	"mikrodash/internal/power/modbus"
 	"mikrodash/internal/power/model"
 )
@@ -157,7 +159,7 @@ func TestAPollFeedsStateChangesAndHistory(t *testing.T) {
 	net, rec := newFakeNet(), newRecorder()
 	m, clock := testManager(t, net, rec)
 	u := Unit{ID: "u1", Model: pgModel(t), Addr: "198.51.100.10:502", Slave: 1}
-	c := &fakeClient{n: net, addr: u.Addr}
+	c := &gateway{client: &fakeClient{n: net, addr: u.Addr}}
 
 	net.set(u.Addr, 1, nil)
 	m.pollUnit(c, u)
@@ -220,7 +222,7 @@ func TestRestoredConditionsAreNotOpenedAgain(t *testing.T) {
 	u := Unit{ID: "u1", Model: pgModel(t), Addr: "a:502", Slave: 1}
 	rec.restore["u1"] = Restored{Open: []Change{{Cond: Cond{Kind: KindMainsLost, Text: "Mains lost"}, Began: true, At: 42}}}
 	net.set(u.Addr, 1, battery(70))
-	m.pollUnit(&fakeClient{n: net, addr: u.Addr}, u)
+	m.pollUnit(&gateway{client: &fakeClient{n: net, addr: u.Addr}}, u)
 	if got := rec.changesOf("u1"); got != "" {
 		t.Errorf("a restored outage began again: %q", got)
 	}
@@ -366,7 +368,7 @@ func TestTheLastReadingSurvivesARestart(t *testing.T) {
 	net, rec := newFakeNet(), newRecorder()
 	m, clock := testManager(t, net, rec)
 	u := Unit{ID: "u1", Model: pgModel(t), Addr: "198.51.100.10:502", Slave: 1}
-	c := &fakeClient{n: net, addr: u.Addr}
+	c := &gateway{client: &fakeClient{n: net, addr: u.Addr}}
 
 	net.set(u.Addr, 1, battery(55))
 	before, err := u.Model.Decode([][]uint16{net.regs[u.Addr][1]})
@@ -395,7 +397,7 @@ func TestTheLastReadingIsKeptOnceAMinuteAndOnStop(t *testing.T) {
 	net, rec := newFakeNet(), newRecorder()
 	m, clock := testManager(t, net, rec)
 	u := Unit{ID: "u1", Model: pgModel(t), Addr: "198.51.100.10:502", Slave: 1}
-	c := &fakeClient{n: net, addr: u.Addr}
+	c := &gateway{client: &fakeClient{n: net, addr: u.Addr}}
 	net.set(u.Addr, 1, nil)
 	for i := 0; i < 14; i++ { // 0 to 65 s, every 5 s
 		m.pollUnit(c, u)
@@ -408,5 +410,58 @@ func TestTheLastReadingIsKeptOnceAMinuteAndOnStop(t *testing.T) {
 	m.Stop()
 	if got := rec.kept["u1"]; len(got) != 3 || got[2] != start+65_000 {
 		t.Errorf("on stop, kept %v; want the reading at %d last", got, start+65_000)
+	}
+}
+
+// fakeUPS answers Megatec commands; rating "" means it echoes F (unsupported).
+type fakeUPS struct {
+	mu     sync.Mutex
+	status string
+	rating string
+	sent   []string
+}
+
+func (f *fakeUPS) Query(c megatec.Command) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if c == megatec.QueryStatus {
+		f.sent = append(f.sent, "Q1")
+		return f.status, nil
+	}
+	f.sent = append(f.sent, "F")
+	if f.rating == "" {
+		return "", megatec.ErrUnsupported
+	}
+	return f.rating, nil
+}
+
+func (f *fakeUPS) Close() error { return nil }
+
+// A MEGATEC UPS IS POLLED WITH Q1, AND ASKED ITS RATING ONCE: the battery is
+// sized from it, and a UPS that does not know F is not asked again.
+func TestAMegatecUPSIsPolledByStatusLine(t *testing.T) {
+	mdl := model.ByID("powerguard/megatec")
+	if mdl == nil {
+		t.Fatal("the Megatec map did not load")
+	}
+	for _, rating := range []string{"#220.0 004 096.0 50.0", ""} {
+		rec := newRecorder()
+		m := NewManager(rec.hooks(), DefaultSettings())
+		ups := &fakeUPS{status: "(230.0 230.0 230.0 012 50.0 2.27 25.0 00000000", rating: rating}
+		u := Unit{ID: "ups", Model: mdl, Addr: "198.51.100.40:4001", Slave: 1}
+		g := &gateway{megatec: ups, rating: map[string]*megatec.Rating{}, asked: map[string]int{}}
+		for i := 0; i < 3; i++ {
+			m.pollUnit(g, u)
+		}
+		if got := strings.Join(ups.sent, ","); got != "Q1,F,Q1,Q1" {
+			t.Errorf("rating %q: sent %s", rating, got)
+		}
+		st := rec.stateOf("ups")
+		if st.Reading == nil || st.Reading.Mode != model.ModeMains || st.Answered != 3 {
+			t.Fatalf("rating %q: state %+v", rating, st)
+		}
+		if _, has := st.Reading.Values["battery_v"]; has != (rating != "") {
+			t.Errorf("rating %q: battery voltage present %v", rating, has)
+		}
 	}
 }

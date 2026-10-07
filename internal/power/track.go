@@ -226,8 +226,11 @@ func (t *Tracker) conditions(r model.Reading) map[condKey]Cond {
 		add(Cond{Kind: KindErrorBits, Code: int(v), Text: fmt.Sprintf("Error bits %d", v)})
 	}
 	// Battery % is voltage-based and reads high whenever the charger runs, so
-	// it is trusted only on battery.
-	if pct, has := r.Values["battery_pct"]; has && r.Mode == model.ModeBattery {
+	// it is trusted only on battery. A unit that judges its own battery low
+	// (the battery_low bit) is believed whenever it says so.
+	if r.Flags["battery_low"] {
+		add(Cond{Kind: KindBatteryLow, Text: "Battery low"})
+	} else if pct, has := r.Values["battery_pct"]; has && r.Mode == model.ModeBattery {
 		_, wasLow := t.open[condKey{kind: KindBatteryLow}]
 		if pct <= t.BatteryLowPct || (wasLow && pct < t.BatteryLowPct+batteryLowClear) {
 			add(Cond{Kind: KindBatteryLow, Text: "Battery low"})

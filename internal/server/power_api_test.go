@@ -249,6 +249,43 @@ func TestPowerUnitWritesAreValidatedAndAudited(t *testing.T) {
 	}
 }
 
+// A MEGATEC UPS HAS A CONVERTER TO ITSELF: RS232 is point to point and the
+// protocol has no address, so no second unit may share its converter, whatever
+// slave ID either names, and its own slave ID is stored as 1.
+func TestAMegatecUPSHasAConverterToItself(t *testing.T) {
+	p := newPowerAPI(t)
+	p.grant("pw-op@global")
+	megatec := func(name, host string, slave int) string {
+		return strings.Replace(unitJSON(name, "", host, slave), "powerguard/modbus-v1.1", "powerguard/megatec", 1)
+	}
+	code, body := p.do("POST", "/api/power/units", megatec("UPS-01", "198.51.100.40", 7))
+	if code != http.StatusOK {
+		t.Fatalf("create: %d %v", code, body)
+	}
+	unit := body["unit"].(map[string]any)
+	if unit["slaveId"] != float64(1) {
+		t.Errorf("a Megatec UPS stored slave ID %v, want 1", unit["slaveId"])
+	}
+	for name, b := range map[string]string{
+		"a second Megatec UPS": megatec("UPS-02", "198.51.100.40", 2),
+		"a Modbus unit":        unitJSON("INV-01", "", "198.51.100.40", 3),
+	} {
+		if code, body := p.do("POST", "/api/power/units", b); code != http.StatusConflict ||
+			!strings.Contains(body["error"].(string), "UPS-01") {
+			t.Errorf("%s on its converter: %d %v", name, code, body)
+		}
+	}
+	if code, _ := p.do("POST", "/api/power/units", megatec("UPS-02", "198.51.100.41", 1)); code != http.StatusOK {
+		t.Errorf("a Megatec UPS on another converter: %d", code)
+	}
+	_, list := p.do("GET", "/api/power", "")
+	for _, u := range list["units"].([]any) {
+		if u.(map[string]any)["protocol"] != "megatec" {
+			t.Errorf("listed without its protocol: %v", u)
+		}
+	}
+}
+
 // LIVE UPDATES GO ONLY WHERE THE LIST WOULD: a viewer receives a unit's
 // `power:state` only while on the page and only for a site they may read,
 // asked at each send.

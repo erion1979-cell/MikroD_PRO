@@ -242,6 +242,8 @@ func TestABrokenDefinitionIsRefused(t *testing.T) {
 		"an unknown kind":            func(d map[string]any) { d["kind"] = "generator" },
 		"no producer name":           func(d map[string]any) { d["producerName"] = "" },
 		"an unknown topology":        func(d map[string]any) { d["topology"] = "line-interactive" },
+		"an unknown protocol":        func(d map[string]any) { d["protocol"] = "snmp" },
+		"megatec with registers":     func(d map[string]any) { d["protocol"] = "megatec" },
 		"an ambiguous function": func(d map[string]any) {
 			d["reads"] = append(d["reads"].([]any), map[string]any{"function": 3, "start": 0, "count": 10})
 		},
@@ -358,6 +360,10 @@ func TestAProductMustUseARealMapAndNoRegistersOfItsOwn(t *testing.T) {
 			"defs/powerguard/modbus-v1.1.json": {Data: mapFile},
 			"defs/powerguard/p1.json":          {Data: product(nil)},
 			"defs/powerguard/p2.json":          {Data: product(map[string]any{"model": "p2", "uses": "p1"})},
+		},
+		"a protocol of its own": {
+			"defs/powerguard/modbus-v1.1.json": {Data: mapFile},
+			"defs/powerguard/p1.json":          {Data: product(map[string]any{"protocol": "megatec"})},
 		},
 		"registers of its own": {
 			"defs/powerguard/modbus-v1.1.json": {Data: mapFile},

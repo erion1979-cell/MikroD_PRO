@@ -67,8 +67,13 @@ var Measures = []Measure{
 	{"temp_ambient", "Ambient temperature", "°C"},
 }
 
-// Flags is every status bit a definition may name.
-var Flags = []string{"mains_ok", "charger_on", "inverter_on", "output_on", "bypass"}
+// Flags is every status bit a definition may name. battery_low is the unit's
+// own judgement, which a Megatec UPS reports (megatec.go).
+var Flags = []string{"mains_ok", "charger_on", "inverter_on", "output_on", "bypass", "battery_low"}
+
+// Protocols are how a unit is read: Modbus registers, described by the file,
+// or the Megatec status line, whose fields are fixed by the protocol.
+var Protocols = []string{"modbus", "megatec"}
 
 // Topologies are how a unit feeds its output. Offline (and line-interactive):
 // mains passes to the output and the inverter takes over when it fails. Online
@@ -145,6 +150,9 @@ type Model struct {
 	// Uses names the map this product reads with: a model id in the same
 	// brand. A product that uses a map carries no registers of its own.
 	Uses string `json:"uses,omitempty"`
+	// Protocol is "modbus" (the default) or "megatec". A Megatec map names no
+	// registers, and a product always reads with its map's protocol.
+	Protocol string `json:"protocol,omitempty"`
 	// Topology is "offline" (the default) or "online"; a product that names
 	// none takes its map's. The page draws the power flow by it.
 	Topology string `json:"topology,omitempty"`
@@ -184,6 +192,9 @@ type Reading struct {
 // Decode turns one poll's registers into a Reading. regs[i] is the reply to
 // m.Reads[i].
 func (m *Model) Decode(regs [][]uint16) (Reading, error) {
+	if m.Protocol != "modbus" {
+		return Reading{}, fmt.Errorf("%s: reads with %s, not Modbus registers", m.ID(), m.Protocol)
+	}
 	if len(regs) != len(m.Reads) {
 		return Reading{}, fmt.Errorf("%s: %d replies for %d reads", m.ID(), len(regs), len(m.Reads))
 	}
@@ -279,12 +290,26 @@ func parse(name string, b []byte) (*Model, error) {
 			return fail("a detail is empty or longer than %d characters", maxDetail)
 		}
 	}
+	if m.Protocol != "" && !slices.Contains(Protocols, m.Protocol) {
+		return fail("protocol %q: want modbus or megatec", m.Protocol)
+	}
+	registers := len(m.Reads) > 0 || len(m.Fields) > 0 || m.Flags.Reg != 0 || m.Flags.Bits != nil ||
+		len(m.Raw) > 0 || m.Event.Reg != 0 || m.Event.Codes != nil || m.Event.NotFault != nil
 	if m.Uses != "" {
-		// Its registers are the map's, filled in by load; any of its own would
-		// be silently ignored, so they are refused.
-		if len(m.Reads) > 0 || len(m.Fields) > 0 || m.Flags.Reg != 0 || m.Flags.Bits != nil ||
-			len(m.Raw) > 0 || m.Event.Reg != 0 || m.Event.Codes != nil || m.Event.NotFault != nil {
-			return fail("uses %q, so it must not describe registers of its own", m.Uses)
+		// Its registers and protocol are the map's, filled in by load; any of
+		// its own would be silently ignored, so they are refused.
+		if registers || m.Protocol != "" {
+			return fail("uses %q, so it must not describe registers or a protocol of its own", m.Uses)
+		}
+		return &m, nil
+	}
+	if m.Protocol == "" {
+		m.Protocol = Protocols[0]
+	}
+	if m.Protocol == "megatec" {
+		// The protocol fixes every field; registers would be ignored.
+		if registers {
+			return fail("reads with megatec, so it must not describe registers")
 		}
 		return &m, nil
 	}
@@ -445,8 +470,8 @@ func load(fsys fs.FS, root string) ([]*Model, error) {
 	return out, resolveUses(out)
 }
 
-// resolveUses gives each product the registers of the map it uses, and its
-// topology unless the product names its own; a model naming none is offline.
+// resolveUses gives each product the protocol and registers of the map it
+// uses, and its topology unless the product names its own; a model naming none is offline.
 // A map is a model with registers of its own: one that itself uses another is
 // refused, so there is never a chain to follow.
 func resolveUses(all []*Model) error {
@@ -462,7 +487,7 @@ func resolveUses(all []*Model) error {
 		if base == nil || base.Uses != "" {
 			return fmt.Errorf("%s: uses %q, which is not a register map of %s", m.ID(), m.Uses, m.Producer)
 		}
-		m.Reads, m.Fields, m.Flags, m.Raw, m.Event = base.Reads, base.Fields, base.Flags, base.Raw, base.Event
+		m.Protocol, m.Reads, m.Fields, m.Flags, m.Raw, m.Event = base.Protocol, base.Reads, base.Fields, base.Flags, base.Raw, base.Event
 		m.codes, m.notFault = base.codes, base.notFault
 		if m.Serial == "" {
 			m.Serial = base.Serial

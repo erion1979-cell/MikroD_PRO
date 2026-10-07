@@ -61,7 +61,7 @@ func TestShownSmoothedRecordedRaw(t *testing.T) {
 	net, rec := newFakeNet(), newRecorder()
 	m, clock := testManager(t, net, rec)
 	u := Unit{ID: "u1", Model: pgModel(t), Addr: "198.51.100.10:502", Slave: 1}
-	c := &fakeClient{n: net, addr: u.Addr}
+	c := &gateway{client: &fakeClient{n: net, addr: u.Addr}}
 	for _, raw := range []uint16{122, 110, 122, 110, 122} { // register 7: battery volts ×10
 		net.set(u.Addr, 1, map[int]uint16{7: raw})
 		m.pollUnit(c, u)
