@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// powerSQL is the stored DDL for everything migration 35 owns.
+// powerSQL is the stored DDL for everything migrations 35 and 37 own.
 func powerSQL(t *testing.T, d *DB) string {
 	t.Helper()
 	rows, err := d.sql.Query(`SELECT name, sql FROM sqlite_master
@@ -30,18 +30,20 @@ func powerSQL(t *testing.T, d *DB) string {
 	return b.String()
 }
 
-// MIGRATION 35 BUILDS WHAT A FRESH DATABASE IS BORN WITH, and it can run twice.
+// MIGRATIONS 35 AND 37 BUILD WHAT A FRESH DATABASE IS BORN WITH, and they can
+// run twice. Winding back to before 35 replays 37 too, so power_last goes with
+// the rest.
 func TestMigrationThirtyFiveBuildsWhatAFreshDatabaseHas(t *testing.T) {
 	d := openTest(t, t.TempDir())
 	fresh := powerSQL(t, d)
 	for _, want := range []string{"power_units", "power_minutes", "power_samples", "power_events",
-		"idx_power_events_unit"} {
+		"idx_power_events_unit", "power_last"} {
 		if !strings.Contains(fresh, want+": ") {
 			t.Fatalf("a fresh database has no %s:\n%s", want, fresh)
 		}
 	}
 	cfgExec(t, d,
-		`DROP INDEX idx_power_events_unit`,
+		`DROP INDEX idx_power_events_unit`, `DROP TABLE power_last`,
 		`DROP TABLE power_events`, `DROP TABLE power_samples`, `DROP TABLE power_minutes`,
 		`DROP TABLE power_units`,
 		`DELETE FROM schema_version WHERE version >= 35`)
@@ -56,7 +58,7 @@ func TestMigrationThirtyFiveBuildsWhatAFreshDatabaseHas(t *testing.T) {
 	}
 	cfgExec(t, d, `DELETE FROM schema_version WHERE version >= 35`)
 	if _, err := d.Migrate(); err != nil {
-		t.Errorf("migration 35 failed on a database that already has the tables: %v", err)
+		t.Errorf("migrations 35 and 37 failed on a database that already has the tables: %v", err)
 	}
 }
 
@@ -282,5 +284,35 @@ func TestPowerStatsAreTheMeanOfAveragesAndTheExtremesOfExtremes(t *testing.T) {
 	}
 	if p := got["input_v"]; p.Avg != 225 || p.Min != 180 || p.Max != 232 {
 		t.Errorf("input_v %+v, want avg 225, min 180, max 232", p)
+	}
+}
+
+// A UNIT'S LAST READING IS ONE ROW, replaced each time, gone with the unit, and
+// never kept for a unit that no longer exists.
+func TestAUnitsLastReadingIsKeptAndGoesWithIt(t *testing.T) {
+	d := openTest(t, t.TempDir())
+	if at, raw, err := d.PowerLast("nobody"); err != nil || at != 0 || raw != nil {
+		t.Fatalf("no reading kept: %d %q %v", at, raw, err)
+	}
+	u := newPowerUnit(t, d)
+	for _, at := range []int64{1000, 2000} {
+		if err := d.SavePowerLast(u.ID, at, []byte(`{"n":`+strings.Repeat("1", int(at/1000))+`}`)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if at, raw, err := d.PowerLast(u.ID); err != nil || at != 2000 || string(raw) != `{"n":11}` {
+		t.Errorf("kept %d %q %v, want the second", at, raw, err)
+	}
+	if err := d.SavePowerLast("gone", 3000, []byte(`{}`)); err != nil {
+		t.Errorf("keeping for a deleted unit: %v", err)
+	}
+	if at, _, _ := d.PowerLast("gone"); at != 0 {
+		t.Error("a reading was kept for a unit that does not exist")
+	}
+	if err := d.DeletePowerUnit(u.ID); err != nil {
+		t.Fatal(err)
+	}
+	if at, _, _ := d.PowerLast(u.ID); at != 0 {
+		t.Error("the last reading outlived its unit")
 	}
 }

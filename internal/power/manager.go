@@ -92,10 +92,28 @@ type Hooks struct {
 	Changes func(unitID string, cs []Change)
 	// Minute is called with each finished minute of history.
 	Minute func(unitID string, m Minute)
-	// Restore supplies a unit's conditions left open by a previous run. Called
-	// once, before the unit's first poll.
-	Restore func(unitID string) []Change
+	// Restore supplies what a unit had when a previous run stopped: its
+	// conditions left open and its last good reading. Called once, before the
+	// unit's first poll.
+	Restore func(unitID string) Restored
+	// Keep is handed a unit's latest good reading, for Restore to give back
+	// after a restart: at most once a minute while the unit answers, and once
+	// more when its poller stops.
+	Keep func(unitID string, r model.Reading, at int64)
 }
+
+// Restored is what a unit had when the previous run stopped.
+type Restored struct {
+	Open []Change
+	// Last is its last good reading, taken at LastOK (Unix ms); nil when none
+	// was kept. A unit silent since the restart shows it as its last known
+	// values rather than "no reading yet".
+	Last   *model.Reading
+	LastOK int64
+}
+
+// keepEvery is how often a unit that keeps answering has its reading kept.
+const keepEvery = 60_000
 
 // Manager runs the pollers.
 type Manager struct {
@@ -123,6 +141,8 @@ type unitState struct {
 	tracker *Tracker
 	bucket  Bucket
 	state   State
+	// kept is when the reading last handed to Keep was taken.
+	kept int64
 }
 
 // NewManager returns a Manager polling nothing until Sync is called.
@@ -159,6 +179,7 @@ func (m *Manager) Sync(units []Unit) {
 	}
 	var stop []*gateway
 	var flushed []unitMinute
+	var kept []unitKeep
 	for addr, g := range m.gateways {
 		if !sameUnits(g.units, want[addr]) {
 			stop = append(stop, g)
@@ -169,6 +190,10 @@ func (m *Manager) Sync(units []Unit) {
 		if u, ok := ids[id]; !ok || u.Addr != us.cfg.Addr || u.Slave != us.cfg.Slave || u.Model != us.cfg.Model {
 			if f := us.bucket.Flush(); f != nil {
 				flushed = append(flushed, unitMinute{id, *f})
+			}
+			// The reading since the last one kept, so a restart loses none.
+			if r := us.state.Reading; r != nil && us.state.LastOK > us.kept {
+				kept = append(kept, unitKeep{id, *r, us.state.LastOK})
 			}
 			delete(m.units, id)
 		}
@@ -189,6 +214,11 @@ func (m *Manager) Sync(units []Unit) {
 		<-g.done
 	}
 	m.emitMinutes(flushed)
+	if m.hooks.Keep != nil {
+		for _, k := range kept {
+			m.hooks.Keep(k.id, k.r, k.at)
+		}
+	}
 	for _, g := range start {
 		go m.run(g)
 	}
@@ -291,6 +321,12 @@ func (m *Manager) pollGateway(g *gateway) {
 	}
 }
 
+type unitKeep struct {
+	id string
+	r  model.Reading
+	at int64
+}
+
 type unitMinute struct {
 	id string
 	m  Minute
@@ -302,7 +338,7 @@ func (m *Manager) pollUnit(c Reader, u Unit) {
 	m.mu.Unlock()
 	// Restore runs outside the lock (it reads the database) and only once.
 	if us == nil {
-		var restored []Change
+		var restored Restored
 		if m.hooks.Restore != nil {
 			restored = m.hooks.Restore(u.ID)
 		}
@@ -336,6 +372,7 @@ func (m *Manager) pollUnit(c Reader, u Unit) {
 	}
 	var changes []Change
 	var done *Minute
+	var keep *model.Reading
 	us.state.Polls++
 	if err != nil {
 		us.state.LastError = safe.Message(err.Error())
@@ -350,6 +387,9 @@ func (m *Manager) pollUnit(c Reader, u Unit) {
 		us.state.Reading, us.state.LastOK, us.state.ReplyMs = &r, ms, reply
 		changes = us.tracker.Success(reading, ms)
 		done = us.bucket.Add(reading, reply, ms)
+		if ms-us.kept >= keepEvery {
+			keep, us.kept = &r, ms
+		}
 	}
 	snap := us.snapshot()
 	m.mu.Unlock()
@@ -360,6 +400,9 @@ func (m *Manager) pollUnit(c Reader, u Unit) {
 	if done != nil {
 		m.emitMinutes([]unitMinute{{u.ID, *done}})
 	}
+	if keep != nil && m.hooks.Keep != nil {
+		m.hooks.Keep(u.ID, *keep, ms)
+	}
 	if m.hooks.State != nil {
 		m.hooks.State(snap)
 	}
@@ -367,13 +410,14 @@ func (m *Manager) pollUnit(c Reader, u Unit) {
 
 // adopt creates a unit's state, unless another poll got there first. Caller
 // holds m.mu.
-func (m *Manager) adopt(u Unit, restored []Change) *unitState {
+func (m *Manager) adopt(u Unit, restored Restored) *unitState {
 	if us := m.units[u.ID]; us != nil {
 		return us
 	}
 	tr := &Tracker{OfflineAfter: m.settings.OfflineAfter, BatteryLowPct: m.settings.BatteryLowPct}
-	tr.Restore(restored)
-	us := &unitState{cfg: u, tracker: tr, state: State{UnitID: u.ID, Online: true}}
+	tr.Restore(restored.Open)
+	us := &unitState{cfg: u, tracker: tr, kept: restored.LastOK,
+		state: State{UnitID: u.ID, Online: true, Reading: restored.Last, LastOK: restored.LastOK}}
 	m.units[u.ID] = us
 	return us
 }

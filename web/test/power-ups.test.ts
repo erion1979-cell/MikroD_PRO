@@ -53,6 +53,10 @@ assert.strictEqual(m.statusOf(unit(state({ mode: 'off' }))), 'off');
 // not "On mains".
 assert.strictEqual(m.statusOf(unit(state({ online: false }))), 'down', 'a silent unit kept its last mode');
 assert.strictEqual(m.statusOf(unit(state({ hasReading: false }))), 'waiting', 'a unit that never answered has a mode');
+// A reading kept from before a restart is last known: until the unit answers
+// this run it is connecting, and if it stays silent it is not responding.
+assert.strictEqual(m.statusOf(unit(state({ answered: 0, polls: 1 }))), 'waiting', 'a kept reading reads as live');
+assert.strictEqual(m.statusOf(unit(state({ answered: 0, online: false }))), 'down', 'a silent unit with a kept reading is not down');
 assert.strictEqual(m.statusLabel(unit(state({ online: false, cause: 'converter' }))), 'Converter unreachable');
 assert.strictEqual(m.statusLabel(unit(state({ online: false, cause: 'unit' }))), 'Inverter not responding');
 assert.strictEqual(m.statusLabel(unit(state({ online: false, cause: '' }))), 'Not responding');

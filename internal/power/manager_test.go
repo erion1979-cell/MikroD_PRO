@@ -80,12 +80,14 @@ type recorder struct {
 	minutes  map[string][]Minute
 	states   map[string]State
 	restores map[string]int
-	restore  map[string][]Change
+	restore  map[string]Restored
+	kept     map[string][]int64
 }
 
 func newRecorder() *recorder {
 	return &recorder{changes: map[string][]Change{}, minutes: map[string][]Minute{},
-		states: map[string]State{}, restores: map[string]int{}, restore: map[string][]Change{}}
+		states: map[string]State{}, restores: map[string]int{}, restore: map[string]Restored{},
+		kept: map[string][]int64{}}
 }
 
 func (r *recorder) hooks() Hooks {
@@ -101,11 +103,16 @@ func (r *recorder) hooks() Hooks {
 			r.minutes[id] = append(r.minutes[id], m)
 			r.mu.Unlock()
 		},
-		Restore: func(id string) []Change {
+		Restore: func(id string) Restored {
 			r.mu.Lock()
 			defer r.mu.Unlock()
 			r.restores[id]++
 			return r.restore[id]
+		},
+		Keep: func(id string, _ model.Reading, at int64) {
+			r.mu.Lock()
+			r.kept[id] = append(r.kept[id], at)
+			r.mu.Unlock()
 		},
 	}
 }
@@ -211,7 +218,7 @@ func TestRestoredConditionsAreNotOpenedAgain(t *testing.T) {
 	net, rec := newFakeNet(), newRecorder()
 	m, _ := testManager(t, net, rec)
 	u := Unit{ID: "u1", Model: pgModel(t), Addr: "a:502", Slave: 1}
-	rec.restore["u1"] = []Change{{Cond: Cond{Kind: KindMainsLost, Text: "Mains lost"}, Began: true, At: 42}}
+	rec.restore["u1"] = Restored{Open: []Change{{Cond: Cond{Kind: KindMainsLost, Text: "Mains lost"}, Began: true, At: 42}}}
 	net.set(u.Addr, 1, battery(70))
 	m.pollUnit(&fakeClient{n: net, addr: u.Addr}, u)
 	if got := rec.changesOf("u1"); got != "" {
@@ -349,5 +356,57 @@ func TestSettingsChangeKeepsStateAndStopFlushes(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 	if after := net.readsOf("a:502", 1); after != polls {
 		t.Error("a stopped manager started polling again")
+	}
+}
+
+// A UNIT SILENT AFTER A RESTART STILL SHOWS WHAT IT LAST SAID, and when: the
+// reading kept before the restart comes back with its time, and silence does
+// not replace it.
+func TestTheLastReadingSurvivesARestart(t *testing.T) {
+	net, rec := newFakeNet(), newRecorder()
+	m, clock := testManager(t, net, rec)
+	u := Unit{ID: "u1", Model: pgModel(t), Addr: "198.51.100.10:502", Slave: 1}
+	c := &fakeClient{n: net, addr: u.Addr}
+
+	net.set(u.Addr, 1, battery(55))
+	before, err := u.Model.Decode([][]uint16{net.regs[u.Addr][1]})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec.restore["u1"] = Restored{Last: &before, LastOK: 777_000}
+	net.setDown(u.Addr, true)
+	for i := 0; i < 3; i++ {
+		*clock += 5000
+		m.pollUnit(c, u)
+	}
+	s := rec.stateOf("u1")
+	if s.Online || s.Reading == nil || s.LastOK != 777_000 || s.Reading.Values["battery_pct"] != before.Values["battery_pct"] {
+		t.Errorf("after the restart: online %v, last ok %d, reading %+v", s.Online, s.LastOK, s.Reading)
+	}
+	if len(rec.kept["u1"]) != 0 {
+		t.Errorf("a silent unit kept a reading: %v", rec.kept["u1"])
+	}
+}
+
+// A READING IS KEPT AT MOST ONCE A MINUTE while the unit answers, and the one
+// since the last kept is handed over when the poller stops, so a restart loses
+// none.
+func TestTheLastReadingIsKeptOnceAMinuteAndOnStop(t *testing.T) {
+	net, rec := newFakeNet(), newRecorder()
+	m, clock := testManager(t, net, rec)
+	u := Unit{ID: "u1", Model: pgModel(t), Addr: "198.51.100.10:502", Slave: 1}
+	c := &fakeClient{n: net, addr: u.Addr}
+	net.set(u.Addr, 1, nil)
+	for i := 0; i < 14; i++ { // 0 to 65 s, every 5 s
+		m.pollUnit(c, u)
+		*clock += 5000
+	}
+	start := int64(1_000_000)
+	if got := rec.kept["u1"]; len(got) != 2 || got[0] != start || got[1] != start+60_000 {
+		t.Errorf("kept at %v, want %d and %d", got, start, start+60_000)
+	}
+	m.Stop()
+	if got := rec.kept["u1"]; len(got) != 3 || got[2] != start+65_000 {
+		t.Errorf("on stop, kept %v; want the reading at %d last", got, start+65_000)
 	}
 }

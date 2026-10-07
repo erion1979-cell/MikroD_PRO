@@ -87,7 +87,9 @@ export function statusOf(u: Unit): Status {
   const st = u.state;
   if (!st) return 'idle';
   if (!st.online) return 'down';
-  if (!st.hasReading) return 'waiting';
+  // A reading kept from before a restart is last known, not live: until the
+  // unit answers this run it is still connecting.
+  if (!st.hasReading || !st.answered) return 'waiting';
   if (st.mode === 'fault' || st.mode === 'battery' || st.mode === 'mains' || st.mode === 'off') return st.mode;
   return 'waiting';
 }
@@ -416,7 +418,10 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
     // unknown, the flow arrows stop, and everything saying "Not responding"
     // is red and pulses. Nothing may look live while the unit is silent.
     const down = s === 'down';
-    el('pwUnitView')?.classList.toggle('pw-is-stale', down);
+    // Stale: what is on screen is not live. Silent, or a reading kept from
+    // before a restart that the unit has not confirmed yet. Only silence is red.
+    const stale = down || s === 'waiting';
+    el('pwUnitView')?.classList.toggle('pw-is-stale', stale);
 
     el('pwUnitSite')!.textContent = siteName(u.siteId);
     el('pwUnitName')!.textContent = u.name;
@@ -457,29 +462,29 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
     el('pwBannerSub')!.textContent = sub;
     el('pwChips')!.innerHTML = ([
       ['mains_ok', 'Mains normal'], ['charger_on', 'Charger running'], ['inverter_on', 'Inverter running'], ['output_on', 'Output on'],
-    ] as [string, string][]).filter(([k]) => k in f).map(([k, label]) => down
+    ] as [string, string][]).filter(([k]) => k in f).map(([k, label]) => stale
       // Unknown, not off: the last reading said one thing, and nobody knows now.
       ? `<span class="pw-chip pw-chip-unknown" title="Unknown: the unit is not answering"><span class="pw-dot pw-tone-idle"></span>${label}?</span>`
       : `<span class="pw-chip"><span class="pw-dot ${f[k] ? 'pw-tone-ok' : 'pw-tone-idle'}"></span>${label}</span>`).join('');
 
     // The power flow.
-    const mainsOn = !down && !!f.mains_ok;
-    const fromBattery = !down && !!f.inverter_on && !mainsOn;
+    const mainsOn = !stale && !!f.mains_ok;
+    const fromBattery = !stale && !!f.inverter_on && !mainsOn;
     const apparent = el('pwApparent')!;
     apparent.classList.toggle('pw-age-alert', down);
-    apparent.textContent = down
-      ? (st?.hasReading && st.lastOk ? 'Last known values, read ' + ago(st.lastOk) : 'No reading yet')
+    apparent.textContent = stale
+      ? (st?.hasReading && st.lastOk ? 'Last known values, read ' + ago(st.lastOk) : down ? 'No reading yet' : '')
       : st?.apparentVa != null ? 'Apparent power (calculated V × A): ' + Math.round(st.apparentVa).toLocaleString() + ' VA' : '';
     el('pwFlow')!.innerHTML = `
       <div class="pw-node" data-pwn="input"><div class="pw-node-label">Mains input</div><div class="pw-node-v">${fmt(v.input_v)} V</div><div class="pw-node-sub">${fmt(v.input_hz)} Hz</div></div>
       <div class="pw-arrow ${mainsOn ? 'is-on' : ''}"></div>
       <div class="pw-node pw-node-mid${down ? ' pw-node-down' : ''}" data-pwn="unit"><div class="pw-node-label" title="${esc(unitTitle(u))}">${unitLabel(u)}</div><div class="pw-node-v pw-tone-${s === 'mains' ? 'ok' : s === 'battery' ? 'warn' : 'bad'}">${esc(statusLabel(u))}</div><div class="pw-node-sub">DC bus ${fmt(v.dc_bus_a)} A</div></div>
-      <div class="pw-arrow ${f.output_on && !down ? 'is-on' : ''} ${s === 'fault' ? 'is-bad' : ''}"></div>
+      <div class="pw-arrow ${f.output_on && !stale ? 'is-on' : ''} ${s === 'fault' ? 'is-bad' : ''}"></div>
       <div class="pw-node" data-pwn="output"><div class="pw-node-label">Output / load</div><div class="pw-node-v">${fmt(v.output_v)} V</div><div class="pw-node-sub">${fmt(v.output_a)} A · ${fmt(v.load_pct, 0)} %</div></div>
       <div class="pw-battery-link ${fromBattery ? 'is-on' : mainsOn && f.charger_on ? 'is-charge' : ''}"><div class="pw-node" data-pwn="battery"><div class="pw-node-label">Battery</div><div class="pw-node-v">${fmt(v.battery_v)} V · ${fmt(v.battery_pct, 0)} %</div></div></div>`;
 
     // The particles along those lines, from the same status bits.
-    flowAnim.set(flowLanes({ down, flags: f, values: v }));
+    flowAnim.set(flowLanes({ down: stale, flags: f, values: v }));
 
     // Battery: % is voltage-based and reads high while charging, so the
     // voltage stands beside it.
@@ -492,11 +497,11 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
     }
     el('pwBatKv')!.innerHTML = kvs([
       ['Voltage', fmt(v.battery_v) + ' V'], ['DC bus current', fmt(v.dc_bus_a) + ' A'],
-      ['Charger', down ? 'Unknown' : f.charger_on ? 'Running' : 'Off'],
+      ['Charger', stale ? 'Unknown' : f.charger_on ? 'Running' : 'Off'],
       ['Capacity', u.batteryAh ? u.batteryAh + ' Ah' : 'not set'],
     ]);
     el('pwInput')!.innerHTML = big(v.input_v, 'V') + kvs([['Frequency', fmt(v.input_hz) + ' Hz'],
-      ['State', down ? 'Unknown' : mainsOn ? 'OK' : 'lost']]);
+      ['State', stale ? 'Unknown' : mainsOn ? 'OK' : 'lost']]);
     el('pwOutput')!.innerHTML = big(v.output_v, 'V') + kvs([['Frequency', fmt(v.output_hz) + ' Hz'], ['Current', fmt(v.output_a) + ' A']]);
     el('pwLoad')!.innerHTML = big(v.load_pct, '% of rated', 0) + kvs([
       ['Apparent', st?.apparentVa != null ? Math.round(st.apparentVa).toLocaleString() + ' VA' : '—'],

@@ -20,6 +20,7 @@ package server
 // and what a restart restores the trackers from.
 
 import (
+	"encoding/json"
 	"log"
 	"net"
 	"strconv"
@@ -61,18 +62,37 @@ func (s *Server) powerStart(noPool, history bool) {
 	adb := s.auditDB
 	hooks := power.Hooks{
 		State: s.powerPush,
-		Restore: func(unitID string) []power.Change {
+		Restore: func(unitID string) power.Restored {
+			var out power.Restored
 			open, err := adb.PowerEvents(unitID, true, 100)
 			if err != nil {
 				log.Printf("[power] could not read open events for %s: %v", unitID, err)
-				return nil
 			}
-			out := make([]power.Change, 0, len(open))
 			for _, e := range open {
-				out = append(out, power.Change{Cond: power.Cond{Kind: power.Kind(e.Kind),
+				out.Open = append(out.Open, power.Change{Cond: power.Cond{Kind: power.Kind(e.Kind),
 					Code: e.Code, Text: e.Text, Fault: e.Fault}, Began: true, At: e.BeganAt, Initial: e.Initial})
 			}
+			// The last reading kept before the restart: a unit still silent
+			// shows it as last known, with its age, not "no reading yet". One
+			// this build cannot read is dropped, not fatal.
+			at, raw, err := adb.PowerLast(unitID)
+			if err != nil {
+				log.Printf("[power] could not read the last reading of %s: %v", unitID, err)
+			}
+			var r model.Reading
+			if at > 0 && json.Unmarshal(raw, &r) == nil {
+				out.Last, out.LastOK = &r, at
+			}
 			return out
+		},
+		Keep: func(unitID string, r model.Reading, at int64) {
+			raw, err := json.Marshal(r)
+			if err == nil {
+				err = adb.SavePowerLast(unitID, at, raw)
+			}
+			if err != nil {
+				log.Printf("[power] could not keep the last reading of %s: %v", unitID, err)
+			}
 		},
 		Changes: func(unitID string, cs []power.Change) {
 			for _, c := range cs {

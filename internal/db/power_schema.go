@@ -27,8 +27,16 @@ package db
 // is still true. `initial` marks one that was already true when monitoring
 // began, whose `began_at` is only when it was first seen.
 //
-// Deleting a unit deletes its history and events, by the foreign keys; the
-// connection has `foreign_keys(1)` set (db.go).
+// ── power_last (migration 37) ──────────────────────────────────────────────
+//
+// Each unit's last good reading, as JSON, and when it was taken: one row per
+// unit, rewritten at most once a minute while the unit answers and once more
+// when the pollers stop. It is what a unit that is silent after a restart shows
+// as its last known values, with how long ago they were read, instead of "No
+// reading yet". State, not history, so it is kept with or without -history.
+//
+// Deleting a unit deletes its history, events and last reading, by the foreign
+// keys; the connection has `foreign_keys(1)` set (db.go).
 const powerTablesDDL = `
 CREATE TABLE IF NOT EXISTS power_units (
           id         TEXT    PRIMARY KEY,
@@ -75,4 +83,12 @@ CREATE TABLE IF NOT EXISTS power_events (
           ended_at INTEGER
         );
 CREATE INDEX IF NOT EXISTS idx_power_events_unit ON power_events(unit_id, began_at);
+`
+
+const powerLastDDL = `
+CREATE TABLE IF NOT EXISTS power_last (
+          unit_id TEXT    PRIMARY KEY REFERENCES power_units(id) ON DELETE CASCADE,
+          at      INTEGER NOT NULL,
+          reading TEXT    NOT NULL
+        );
 `

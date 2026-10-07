@@ -326,3 +326,25 @@ func (d *DB) PowerStats(unitID string, keys []string, from, to int64) (map[strin
 	}
 	return out, rows.Err()
 }
+
+// SavePowerLast keeps a unit's last good reading (JSON) and when it was taken,
+// replacing the one before. A unit deleted meanwhile is not an error: there is
+// nothing left to keep it for.
+func (d *DB) SavePowerLast(unitID string, at int64, reading []byte) error {
+	_, err := d.sql.Exec(`INSERT INTO power_last (unit_id, at, reading)
+		SELECT ?, ?, ? WHERE EXISTS (SELECT 1 FROM power_units WHERE id = ?)
+		ON CONFLICT(unit_id) DO UPDATE SET at = excluded.at, reading = excluded.reading`,
+		unitID, at, string(reading), unitID)
+	return err
+}
+
+// PowerLast is a unit's last kept reading and when it was taken; at is 0 when
+// none was ever kept.
+func (d *DB) PowerLast(unitID string) (at int64, reading []byte, err error) {
+	var s string
+	err = d.sql.QueryRow(`SELECT at, reading FROM power_last WHERE unit_id = ?`, unitID).Scan(&at, &s)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil, nil
+	}
+	return at, []byte(s), err
+}

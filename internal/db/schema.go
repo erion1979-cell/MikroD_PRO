@@ -23,7 +23,7 @@ import (
 // Stamping anything lower would make `Open` refuse the database it had just
 // written; stamping higher than the migrations listed would claim ones that
 // never ran.
-const schemaVersion = 36
+const schemaVersion = 37
 
 // portMigrations are the schema steps this port owns, keyed by the version they
 // take a database TO.
@@ -326,6 +326,9 @@ var portMigrations = map[int][]string{
 		`DROP TABLE user_layouts`,
 		`ALTER TABLE user_layouts_v36 RENAME TO user_layouts`,
 	},
+	// 37: each Power/UPS unit's last good reading, so a unit silent after a
+	// restart still shows what it last said and when. See power_schema.go.
+	37: {powerLastDDL},
 }
 
 // createSchema builds a new database at `path`.
