@@ -143,6 +143,8 @@ type unitState struct {
 	state   State
 	// kept is when the reading last handed to Keep was taken.
 	kept int64
+	// smooth is the window the shown values are the median of (smooth.go).
+	smooth smoother
 }
 
 // NewManager returns a Manager polling nothing until Sync is called.
@@ -377,15 +379,18 @@ func (m *Manager) pollUnit(c Reader, u Unit) {
 	if err != nil {
 		us.state.LastError = safe.Message(err.Error())
 		us.state.Cause = CauseOf(err)
+		us.smooth.reset()
 		changes = us.tracker.Failure(ms, us.state.Cause)
 		done = us.bucket.Fail(ms)
 	} else {
 		reply := float64(at.Sub(began).Microseconds()) / 1000
-		r := reading
+		// Shown, judged and kept smoothed; recorded raw, so every dip stays in
+		// the minute's lowest and highest (smooth.go).
+		r := us.smooth.add(reading)
 		us.state.Answered++
 		us.state.Cause = CauseUnknown
 		us.state.Reading, us.state.LastOK, us.state.ReplyMs = &r, ms, reply
-		changes = us.tracker.Success(reading, ms)
+		changes = us.tracker.Success(r, ms)
 		done = us.bucket.Add(reading, reply, ms)
 		if ms-us.kept >= keepEvery {
 			keep, us.kept = &r, ms
