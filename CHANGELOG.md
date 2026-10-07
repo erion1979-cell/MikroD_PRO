@@ -2,6 +2,32 @@
 
 All notable changes to MikroDash will be documented in this file.
 
+## [0.8.71-pro.8] - Megatec UPSs, and online units drawn as they work
+
+Built on MikroDash 0.8.71, like 0.8.71-pro.7.
+
+### New
+
+- **UPSs that speak Megatec.** Choose "Other UPS (Megatec protocol)" and point it at an RS232
+  serial-to-Ethernet converter in transparent mode (usually 2400 8N1). One UPS per converter, so
+  the form asks no slave ID, and its ⓘ shows the RS232 setup. Input and output voltage, load,
+  input frequency, battery voltage, temperature, mains failure, bypass, UPS failure, battery test
+  and pending shutdown are read. Battery % is estimated from the battery voltage and says so; the
+  UPS's own battery-low signal also raises Battery low. Offline and online Megatec UPSs are both
+  drawn as the UPS reports itself. MikroDash sends only the two read commands, never a test or a
+  shutdown. `powerprobe` reads Megatec UPSs too.
+- **Online (double-conversion) units.** A model file can say `"topology": "online"`. The unit box
+  then holds a Charger and an Inverter, with power running from the charger down to the battery
+  and from the battery up to the inverter, and the output always fed by the inverter. When the
+  unit reports bypass, mains to output is drawn in amber with an "On bypass" banner.
+
+### Changed
+
+- **Steadier live values.** Output voltage, battery voltage and battery % are shown as the
+  average of the last 6 readings (30 seconds at the default interval), so a load switching on and
+  off no longer makes them jump. History still records every reading, dips included.
+- **The Reports tab's events table fits a phone**, one card per event.
+
 ## [0.8.71-pro.7] - Power/UPS reports, and exports for Excel
 
 Built on MikroDash 0.8.71, like 0.8.71-pro.6.
