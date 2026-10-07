@@ -480,9 +480,10 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
     // The power flow.
     const mainsOn = !stale && !!f.mains_ok;
     const fromBattery = !stale && !!f.inverter_on && !mainsOn;
-    // Mains lost, as the unit reports it now: the Mains input box flashes red
-    // like a silent unit. Not while stale - a silent unit's mains is unknown.
-    const mainsLost = !stale && 'mains_ok' in f && !f.mains_ok;
+    // Mains as the unit reports it now: the Mains input box is green while it is
+    // normal, and flashes red like a silent unit when it is lost. Plain while
+    // stale - a silent unit's mains is unknown.
+    const mainsTone = stale || !('mains_ok' in f) ? '' : f.mains_ok ? ' pw-node-ok' : ' pw-node-down';
     // Output and battery borders, from the live reading only: green while the
     // output is on, red while it is off; the battery by its charge (batteryTone).
     const outTone = stale || !('output_on' in f) ? '' : f.output_on ? ' pw-node-ok' : ' pw-node-bad';
@@ -493,7 +494,7 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
       ? (st?.hasReading && st.lastOk ? 'Last known values, read ' + ago(st.lastOk) : down ? 'No reading yet' : '')
       : st?.apparentVa != null ? 'Apparent power (calculated V × A): ' + Math.round(st.apparentVa).toLocaleString() + ' VA' : '';
     el('pwFlow')!.innerHTML = `
-      <div class="pw-node${mainsLost ? ' pw-node-down' : ''}" data-pwn="input"><div class="pw-node-label">Mains input</div><div class="pw-node-v">${fmt(v.input_v)} V</div><div class="pw-node-sub">${fmt(v.input_hz)} Hz</div></div>
+      <div class="pw-node${mainsTone}" data-pwn="input"><div class="pw-node-label">Mains input</div><div class="pw-node-v">${fmt(v.input_v)} V</div><div class="pw-node-sub">${fmt(v.input_hz)} Hz</div></div>
       <div class="pw-arrow ${mainsOn ? 'is-on' : ''}"></div>
       <div class="pw-node pw-node-mid${down ? ' pw-node-down' : ''}" data-pwn="unit"><div class="pw-node-label" title="${esc(unitTitle(u))}">${unitLabel(u)}</div><div class="pw-node-v pw-tone-${s === 'mains' ? 'ok' : s === 'battery' ? 'warn' : 'bad'}">${esc(statusLabel(u))}</div><div class="pw-node-sub">DC bus ${fmt(v.dc_bus_a)} A</div></div>
       <div class="pw-arrow ${f.output_on && !stale ? 'is-on' : ''} ${s === 'fault' ? 'is-bad' : ''}"></div>
