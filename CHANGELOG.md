@@ -2,6 +2,19 @@
 
 All notable changes to MikroDash will be documented in this file.
 
+## [0.8.71-pro.6] - The power flow says how the output and battery are
+
+Built on MikroDash 0.8.71, like 0.8.71-pro.5.
+
+### Changed
+
+- **The Output / load box** in a unit's power flow has a green border while the output is on
+  and a red one while it is off.
+- **The Battery box** is green from 100 % to 30 %, amber from 29 % to 10 %, and red and pulsing
+  from 9 % down. Both boxes stay plain while the unit is not answering, since their state is
+  then unknown.
+- **The bar in the Battery panel** follows the same colours, instead of turning red at 20 %.
+
 ## [0.8.71-pro.5] - The HSI series, and a unit remembered across restarts
 
 Built on MikroDash 0.8.71, like 0.8.71-pro.4.
