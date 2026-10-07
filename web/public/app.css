@@ -3888,6 +3888,26 @@
 /* The flow's boxes by state (power-ups.ts): output on / off, battery charge. */
 /* The Power/UPS page's Reports tab: the window and unit pickers in one wrapping row. */
 .pw-report-controls{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin-bottom:.75rem}
+/* The report's events table wraps instead of spilling: on a phone a long event
+   ("Not responding - converter OK, inverter silent") is wider than its column. */
+.bw-table.pw-events-table td{white-space:normal;overflow:visible;overflow-wrap:anywhere}
+.pw-events-table .vpn-hs-badge{white-space:normal;display:inline-block;max-width:100%;line-height:1.35}
+/* On a phone each event is a small card: the event first, then its times,
+   each named by its data-label. The header (and its sort) is not shown; rows
+   keep the newest-first order. */
+@media (max-width:620px){
+  /* Not the 905px every other bw-table scrolls at on a phone: these are cards
+     and fit the screen. */
+  .bw-table.pw-events-table{table-layout:auto;min-width:0;width:100%}
+  .pw-events-table thead{display:none}
+  .pw-events-table,.pw-events-table tbody{display:block;width:100%}
+  .pw-events-table tr{display:flex;flex-direction:column;gap:.15rem;padding:.5rem .6rem;border-bottom:1px solid var(--border)}
+  .pw-events-table td{display:block;max-width:none;border:0;padding:0;text-align:left!important}
+  .pw-events-table td.pw-ev-what{order:-1;margin-bottom:.15rem}
+  .pw-events-table td[data-label]::before{content:attr(data-label) " ";color:var(--text-muted);font-family:var(--font-ui);
+    font-size:.62rem;text-transform:uppercase;letter-spacing:.05em;margin-right:.35rem}
+  .pw-events-table td[colspan]{text-align:center!important}
+}
 .pw-node-ok{border:2px solid var(--accent-ok)!important}
 .pw-node-warn{border:2px solid var(--accent-warn)!important}
 .pw-node-bad{border:2px solid var(--accent-err)!important}

@@ -127,13 +127,15 @@ export function createPowerReport(ids: PowerReportIds): PowerReportView {
     if (tbody) {
       const sorted = sortRows(rows, sort.col, sort.dir);
       tbody.innerHTML = sorted.length
+        // data-label names each cell where a phone stacks the row (app.css,
+        // .pw-events-table).
         ? sorted.map((r) =>
-          '<tr><td style="font-family:var(--font-mono);font-size:.71rem;color:var(--text-muted)">' +
+          '<tr><td data-label="Began" style="font-family:var(--font-mono);font-size:.71rem;color:var(--text-muted)">' +
           esc(fmtTs(r.began)) + (r.initial ? ' · already so when monitoring began' : '') + '</td>' +
-          '<td><span class="vpn-hs-badge ' + (TONE[r.tone] || 'hs-info') + '">' + esc(r.what) + '</span></td>' +
-          '<td style="font-family:var(--font-mono);font-size:.71rem">' +
+          '<td class="pw-ev-what"><span class="vpn-hs-badge ' + (TONE[r.tone] || 'hs-info') + '">' + esc(r.what) + '</span></td>' +
+          '<td data-label="Ended" style="font-family:var(--font-mono);font-size:.71rem">' +
           (r.ended ? esc(fmtTs(r.ended)) : '<span style="color:var(--accent-warn)">Open</span>') + '</td>' +
-          '<td style="font-family:var(--font-mono);font-size:.71rem;text-align:right">' +
+          '<td data-label="Lasted" style="font-family:var(--font-mono);font-size:.71rem;text-align:right">' +
           esc(fmtDuration(r.lasted)) + '</td></tr>').join('')
         : '<tr><td colspan="4" class="rpt-empty">No events for this range.</td></tr>';
     }
