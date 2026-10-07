@@ -398,15 +398,20 @@ func TestPowerExportWritesHistoryAndEventsAsCSV(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("%s: %d %s", q, rec.Code, rec.Body.String())
 		}
-		return rec.Header().Get("Content-Disposition"), rec.Body.String()
+		// Excel's form: a byte-order mark, CRLF lines, the last one ended.
+		body := rec.Body.String()
+		if !strings.HasPrefix(body, "\xef\xbb\xbf") || !strings.HasSuffix(body, "\r\n") {
+			t.Fatalf("%s: not a UTF-8 BOM file of CRLF lines: %q", q, body)
+		}
+		return rec.Header().Get("Content-Disposition"), strings.TrimSuffix(strings.TrimPrefix(body, "\xef\xbb\xbf"), "\r\n")
 	}
 	disp, body := get("range=24h")
-	lines := strings.Split(body, "\n")
-	if !strings.Contains(disp, `filename="power-INV-01-Server-history-24h.csv"`) {
+	lines := strings.Split(body, "\r\n")
+	if !strings.Contains(disp, `filename="power-INV-01-Server-history-24h-1m.csv"`) {
 		t.Errorf("disposition %q", disp)
 	}
-	if len(lines) != 3 || !strings.HasPrefix(lines[0], "ts,input_v,input_v_min,input_v_max,input_hz,") ||
-		!strings.HasSuffix(lines[0], ",polls,answered,reply_ms") {
+	if len(lines) != 3 || !strings.HasPrefix(lines[0], "Time (UTC),Input voltage (V),Input voltage min (V),Input voltage max (V),Input frequency (Hz),") ||
+		!strings.HasSuffix(lines[0], ",Polls,Answered,Reply time (ms)") {
 		t.Fatalf("history CSV:\n%s", body)
 	}
 	if !strings.Contains(lines[1], ",229.5,228.5,230.5,") || !strings.HasSuffix(lines[1], ",12,11,140") ||
@@ -414,17 +419,59 @@ func TestPowerExportWritesHistoryAndEventsAsCSV(t *testing.T) {
 		t.Errorf("history rows:\n%s", body)
 	}
 	_, body = get("range=7d&what=events")
-	lines = strings.Split(body, "\n")
-	if len(lines) != 2 || lines[0] != "began,ended,duration_s,kind,code,text,fault,already_on_start" {
+	lines = strings.Split(body, "\r\n")
+	if len(lines) != 2 || lines[0] != "Began (UTC),Ended (UTC),Duration (s),Kind,Code,Event,Fault,Already so at start" {
 		t.Fatalf("events CSV:\n%s", body)
 	}
-	if !strings.Contains(lines[1], ",,,event,3,'=HYPERLINK(1),true,false") {
+	if !strings.Contains(lines[1], ",,,event,3,'=HYPERLINK(1),yes,no") {
 		t.Errorf("event row %q: an open event has no end, and the formula must be defused", lines[1])
 	}
 	// The Reports tab's window: only the first minute falls inside it.
 	disp, body = get(fmt.Sprintf("from=%d&to=%d", now-150_000, now-90_000))
-	if lines = strings.Split(body, "\n"); len(lines) != 2 || !strings.Contains(lines[1], ",229.5,") ||
-		!strings.Contains(disp, "-history-range.csv") {
+	if lines = strings.Split(body, "\r\n"); len(lines) != 2 || !strings.Contains(lines[1], ",229.5,") ||
+		!strings.Contains(disp, "-history-range-1m.csv") {
 		t.Errorf("from/to export %q:\n%s", disp, body)
+	}
+}
+
+// THE EXPORT FOLDS MINUTES INTO THE CHOSEN INTERVAL, and writes Excel's other
+// format on request: semicolons, decimal commas. Fixed times, so no run can
+// straddle an hour.
+func TestPowerExportFoldsIntoAnIntervalAndWritesDecimalCommas(t *testing.T) {
+	p := newPowerAPI(t)
+	p.grant("pw-view@global")
+	site := "site-1"
+	u, err := p.d.CreatePowerUnit(db.PowerUnit{Name: "INV-02", SiteID: &site, Model: "powerguard/modbus-v1.1",
+		Host: "198.51.100.11", Port: 502, SlaveID: 1, Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	hour := time.Date(2026, 3, 10, 14, 0, 0, 0, time.UTC).UnixMilli()
+	for i, v := range []float64{230, 220.5, 210} { // minutes 0, 1 and 70
+		ts := hour + []int64{0, 60_000, 70 * 60_000}[i]
+		if err := p.d.RecordPowerMinute(u.ID, ts, 12, 10, 100+float64(i)*10, []db.PowerStat{
+			{Key: "input_v", Avg: v, Min: v - 1, Max: v + 1}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	req := httptest.NewRequest("GET", fmt.Sprintf("/api/power/units/%s/export.csv?from=%d&to=%d&step=1h&sep=semicolon",
+		u.ID, hour, hour+2*3_600_000), nil)
+	req.Header.Set("Cookie", "mikrodash_sid="+p.token)
+	rec := httptest.NewRecorder()
+	p.h.ServeHTTP(rec, req)
+	lines := strings.Split(strings.TrimSuffix(strings.TrimPrefix(rec.Body.String(), "\xef\xbb\xbf"), "\r\n"), "\r\n")
+	if rec.Code != http.StatusOK || len(lines) != 3 || !strings.HasPrefix(lines[0], "Time (UTC);Input voltage (V);") {
+		t.Fatalf("%d:\n%s", rec.Code, rec.Body.String())
+	}
+	// The first hour: two minutes, mean 225.25, lowest 219.5, highest 231;
+	// polls summed, the reply time averaged over the answered polls.
+	if !strings.HasPrefix(lines[1], "2026-03-10 14:00:00;225,25;219,5;231;") || !strings.HasSuffix(lines[1], ";24;20;105") {
+		t.Errorf("first hour %q", lines[1])
+	}
+	if !strings.HasPrefix(lines[2], "2026-03-10 15:00:00;210;209;211;") || !strings.HasSuffix(lines[2], ";12;10;120") {
+		t.Errorf("second hour %q", lines[2])
+	}
+	if !strings.Contains(rec.Header().Get("Content-Disposition"), "-history-range-1h.csv") {
+		t.Errorf("disposition %q", rec.Header().Get("Content-Disposition"))
 	}
 }

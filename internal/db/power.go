@@ -212,21 +212,25 @@ type PowerPoint struct {
 // `bucketMs` (a whole number of minutes): the mean of the minute averages, the
 // lowest minimum and the highest maximum, so a dip shorter than a bucket still
 // shows as the minimum. Keyed by measure, each series in time order.
-func (d *DB) PowerHistory(unitID string, keys []string, from, to, bucketMs int64) (map[string][]PowerPoint, error) {
+//
+// `offsetMs` is the local zone's offset from UTC, so an hour or a day bucket
+// starts on the local clock's hour or midnight rather than UTC's; 0 for UTC.
+func (d *DB) PowerHistory(unitID string, keys []string, from, to, bucketMs, offsetMs int64) (map[string][]PowerPoint, error) {
 	out := map[string][]PowerPoint{}
 	if len(keys) == 0 || bucketMs < 60000 {
 		return out, nil
 	}
-	args := []any{bucketMs, bucketMs, unitID, from, to}
+	args := []any{offsetMs, bucketMs, bucketMs, offsetMs, unitID, from, to}
 	marks := make([]string, len(keys))
 	for i, k := range keys {
 		marks[i] = "?"
 		args = append(args, k)
 		out[k] = []PowerPoint{}
 	}
-	rows, err := d.sql.Query(`SELECT key, (ts / ?) * ?, AVG(avg), MIN(min), MAX(max)
+	rows, err := d.sql.Query(`SELECT key, ((ts + ?) / ?) * ? - ?, AVG(avg), MIN(min), MAX(max)
 	    FROM power_samples WHERE unit_id = ? AND ts >= ? AND ts <= ? AND key IN (`+
-		strings.Join(marks, ",")+`) GROUP BY key, ts / `+strconv.FormatInt(bucketMs, 10)+` ORDER BY key, 2`, args...)
+		strings.Join(marks, ",")+`) GROUP BY key, (ts + `+strconv.FormatInt(offsetMs, 10)+`) / `+
+		strconv.FormatInt(bucketMs, 10)+` ORDER BY key, 2`, args...)
 	if err != nil {
 		return nil, err
 	}

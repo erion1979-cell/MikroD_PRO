@@ -15,6 +15,7 @@
               <button class="stab" type="button" role="tab" aria-selected="false" data-pwtab="battery">On battery</button>
               <button class="stab" type="button" role="tab" aria-selected="false" data-pwtab="fault">Fault</button>
               <button class="stab" type="button" role="tab" aria-selected="false" data-pwtab="down">Not responding</button>
+              <button class="stab" type="button" role="tab" aria-selected="false" data-pwtab="reports">Reports</button>
             </span>
           </div>
           <div class="hdr-actions d-flex align-items-center gap-2">
@@ -23,6 +24,44 @@
         </div>
         <div class="card-body">
           <div class="muted-note mb-2" id="pwNotice" hidden></div>
+
+          <!-- ── REPORTS ── one unit over a chosen window: the same report as the
+               Reports page's Power/UPS tab (pages/reports-power.ts), with its
+               exports for Excel. -->
+          <div id="pwReportView" hidden>
+            <div class="pw-report-controls">
+              <select id="pwrUnit" class="rpt-select" title="Power/UPS unit"></select>
+              <select id="pwrPreset" class="rpt-select" title="Quick date range">
+                <option value="last24h" selected>Last 24 Hours</option>
+                <option value="last7d">Last 7 Days</option>
+                <option value="last30d">Last 30 Days</option>
+                <option value="today">Today</option>
+                <option value="thisWeek">This Week</option>
+                <option value="thisMonth">This Month</option>
+                <option value="prevWeek">Previous Week</option>
+                <option value="prevMonth">Previous Month</option>
+                <option value="custom">Custom</option>
+              </select>
+              <input type="datetime-local" id="pwrFrom" class="rpt-date-input" title="From date and time"/>
+              <span class="muted-note">to</span>
+              <input type="datetime-local" id="pwrTo" class="rpt-date-input" title="To date and time"/>
+              <button class="sbtn sbtn-primary" id="pwrLoad" type="button">Load</button>
+            </div>
+            <div class="rpt-export-row">
+              <span class="muted-note">Export for Excel:</span>
+              <select id="pwrStep" class="rpt-select" title="Export interval: one CSV row per"></select>
+              <select id="pwrSep" class="rpt-select" title="CSV form for Excel"></select>
+              <a id="pwrCsv" class="sbtn sbtn-ghost" href="#" download style="display:none">Export CSV</a>
+              <a id="pwrEventsCsv" class="sbtn sbtn-ghost" href="#" download style="display:none">Events CSV</a>
+            </div>
+            <div class="rpt-stat-row" id="pwrStats"></div>
+            <div class="bw-table-wrap">
+              <table class="bw-table">
+                <thead><tr id="pwrThead"><th>Began</th><th>Event</th><th>Ended</th><th style="text-align:right">Lasted</th></tr></thead>
+                <tbody id="pwrTbody"><tr><td colspan="4" class="rpt-empty">Choose a unit and a date range.</td></tr></tbody>
+              </table>
+            </div>
+          </div>
 
           <!-- ── THE FLEET LIST ── -->
           <div id="pwListView">

@@ -66,78 +66,162 @@ const COLS: SortCol[] = [
 ];
 const TONE: Record<string, string> = { ok: 'hs-ok', warn: 'hs-warn', bad: 'hs-stale', idle: 'hs-never', info: 'hs-info' };
 
-let rows: Row[] = [];
-const sort: SortState = { col: 'began', dir: 'desc' };
+/** The export intervals: `step` in internal/server/power_export.go. */
+export const EXPORT_STEPS: [string, string][] = [
+  ['1m', '1 minute'], ['5m', '5 minutes'], ['15m', '15 minutes'], ['1h', '1 hour'], ['1d', '1 day'],
+];
 
-function applySort(): void {
-  const tbody = el('rptPowerTbody');
-  if (tbody) {
-    const sorted = sortRows(rows, sort.col, sort.dir);
-    tbody.innerHTML = sorted.length
-      ? sorted.map((r) =>
-        '<tr><td style="font-family:var(--font-mono);font-size:.71rem;color:var(--text-muted)">' +
-        esc(fmtTs(r.began)) + (r.initial ? ' · already so when monitoring began' : '') + '</td>' +
-        '<td><span class="vpn-hs-badge ' + (TONE[r.tone] || 'hs-info') + '">' + esc(r.what) + '</span></td>' +
-        '<td style="font-family:var(--font-mono);font-size:.71rem">' +
-        (r.ended ? esc(fmtTs(r.ended)) : '<span style="color:var(--accent-warn)">Open</span>') + '</td>' +
-        '<td style="font-family:var(--font-mono);font-size:.71rem;text-align:right">' +
-        esc(fmtDuration(r.lasted)) + '</td></tr>').join('')
-      : '<tr><td colspan="4" class="rpt-empty">No events for this range.</td></tr>';
+/**
+ * The CSV form Excel expects here: `semicolon` (decimal comma) where numbers
+ * are written 1,5, `comma` where they are written 1.5. From the browser's
+ * language, the same thing Excel follows.
+ */
+export function defaultSep(locale?: string): 'comma' | 'semicolon' {
+  return (1.5).toLocaleString(locale).includes(',') ? 'semicolon' : 'comma';
+}
+
+const STEP_KEY = 'mkd_pw_export_step';
+const SEP_KEY = 'mkd_pw_export_sep';
+const remembered = (key: string): string => { try { return localStorage.getItem(key) || ''; } catch { return ''; } };
+const remember = (key: string, v: string): void => { try { localStorage.setItem(key, v); } catch { /* a convenience */ } };
+
+/** One report's elements, by id: the Reports page's and the Power/UPS page's. */
+export interface PowerReportIds {
+  unit: string; stats: string; thead: string; tbody: string;
+  csv: string; eventsCsv: string; step: string; sep: string;
+}
+
+export interface PowerReportView {
+  /** Fill the unit picker; resolves with the units the viewer may read. */
+  loadUnits(): Promise<{ id: string; name: string }[]>;
+  /** Load the chosen unit's report for the window, and point the exports at it. */
+  load(from: number, to: number): void;
+}
+
+/**
+ * One Power/UPS report, drawn into the elements `ids` names: the stat cards, the
+ * events table and the two exports, with the interval and CSV-form pickers that
+ * shape the history export. The Reports page's Power/UPS tab and the Power/UPS
+ * page's Reports tab are both one of these, so they can never disagree.
+ */
+export function createPowerReport(ids: PowerReportIds): PowerReportView {
+  let rows: Row[] = [];
+  const sort: SortState = { col: 'began', dir: 'desc' };
+  let span: { from: number; to: number } | null = null;
+
+  const stepSel = el<HTMLSelectElement>(ids.step);
+  if (stepSel) {
+    stepSel.innerHTML = EXPORT_STEPS.map(([v, l]) => '<option value="' + v + '">' + esc(l) + '</option>').join('');
+    stepSel.value = EXPORT_STEPS.some(([v]) => v === remembered(STEP_KEY)) ? remembered(STEP_KEY) : '1m';
   }
-  renderSortHeader('rptPowerThead', COLS, sort, applySort);
-}
+  const sepSel = el<HTMLSelectElement>(ids.sep);
+  if (sepSel) {
+    sepSel.innerHTML = '<option value="semicolon">Excel, decimal comma (1,5 ; )</option>' +
+      '<option value="comma">Excel, decimal point (1.5 , )</option>';
+    const r = remembered(SEP_KEY);
+    sepSel.value = r === 'comma' || r === 'semicolon' ? r : defaultSep();
+  }
 
-export function renderPowerReport(r: PowerReport): void {
-  const stats = el('rptPowerStats');
-  if (stats) stats.innerHTML = powerStats(r).map(([v, l]) => statCard(v, l)).join('');
-  rows = r.events.map((c) => {
-    const line = eventLine(c, r.to);
-    return {
-      began: c.beganAt,
-      ended: c.endedAt ?? null,
-      what: line.title,
-      initial: c.initial,
-      tone: line.tone,
-      lasted: c.endedAt != null ? c.endedAt - c.beganAt : null,
-    };
-  });
-  applySort();
-}
+  function applySort(): void {
+    const tbody = el(ids.tbody);
+    if (tbody) {
+      const sorted = sortRows(rows, sort.col, sort.dir);
+      tbody.innerHTML = sorted.length
+        ? sorted.map((r) =>
+          '<tr><td style="font-family:var(--font-mono);font-size:.71rem;color:var(--text-muted)">' +
+          esc(fmtTs(r.began)) + (r.initial ? ' · already so when monitoring began' : '') + '</td>' +
+          '<td><span class="vpn-hs-badge ' + (TONE[r.tone] || 'hs-info') + '">' + esc(r.what) + '</span></td>' +
+          '<td style="font-family:var(--font-mono);font-size:.71rem">' +
+          (r.ended ? esc(fmtTs(r.ended)) : '<span style="color:var(--accent-warn)">Open</span>') + '</td>' +
+          '<td style="font-family:var(--font-mono);font-size:.71rem;text-align:right">' +
+          esc(fmtDuration(r.lasted)) + '</td></tr>').join('')
+        : '<tr><td colspan="4" class="rpt-empty">No events for this range.</td></tr>';
+    }
+    renderSortHeader(ids.thead, COLS, sort, applySort);
+  }
 
-/** Fill the unit picker and show the tab when there is a unit to show. */
-export function loadPowerUnits(): Promise<void> {
-  return fetch('/api/power', { credentials: 'same-origin' })
-    .then((r) => (r.ok ? r.json() : { units: [] }))
-    .then((j: { units?: { id: string; name: string }[] }) => {
-      const units = j.units || [];
-      const tab = document.querySelector<HTMLElement>('#rptTabBar [data-rtab="power"]');
-      if (tab) tab.hidden = units.length === 0;
-      const sel = el<HTMLSelectElement>('rptPowerUnit');
-      if (!sel) return;
-      const current = sel.value;
-      sel.innerHTML = units.map((u) => '<option value="' + esc(u.id) + '">' + esc(u.name) + '</option>').join('');
-      if (current && units.some((u) => u.id === current)) sel.value = current;
-    })
-    .catch(() => { /* no tab is the right answer to a failed list */ });
-}
+  function render(r: PowerReport): void {
+    const stats = el(ids.stats);
+    if (stats) stats.innerHTML = powerStats(r).map(([v, l]) => statCard(v, l)).join('');
+    rows = r.events.map((c) => {
+      const line = eventLine(c, r.to);
+      return {
+        began: c.beganAt,
+        ended: c.endedAt ?? null,
+        what: line.title,
+        initial: c.initial,
+        tone: line.tone,
+        lasted: c.endedAt != null ? c.endedAt - c.beganAt : null,
+      };
+    });
+    applySort();
+  }
 
-/** Load the chosen unit's report for the window, and point the exports at it. */
-export function loadPowerReport(from: number, to: number): void {
-  const id = el<HTMLSelectElement>('rptPowerUnit')?.value;
-  if (!id) return;
-  const base = '/api/power/units/' + encodeURIComponent(id);
-  const q = 'from=' + from + '&to=' + to;
-  for (const [link, what] of [['rptPowerCsvLink', 'history'], ['rptPowerEventsCsvLink', 'events']]) {
-    const a = el<HTMLAnchorElement>(link as string);
-    if (a) {
-      a.href = base + '/export.csv?' + q + '&what=' + what;
-      a.style.display = '';
+  /** Point the two exports at the window, with the interval and form chosen. */
+  function links(): void {
+    const id = el<HTMLSelectElement>(ids.unit)?.value;
+    if (!id || !span) return;
+    const base = '/api/power/units/' + encodeURIComponent(id) + '/export.csv?from=' + span.from + '&to=' + span.to +
+      '&sep=' + (sepSel?.value || 'comma');
+    for (const [link, q] of [[ids.csv, '&what=history&step=' + (stepSel?.value || '1m')], [ids.eventsCsv, '&what=events']]) {
+      const a = el<HTMLAnchorElement>(link as string);
+      if (a) {
+        a.href = base + q;
+        a.style.display = '';
+      }
     }
   }
-  fetch(base + '/report?' + q, { credentials: 'same-origin' })
-    .then((r) => r.json())
-    .then((j: { ok?: boolean; report?: PowerReport }) => {
-      if (j.ok && j.report && el<HTMLSelectElement>('rptPowerUnit')?.value === id) renderPowerReport(j.report);
-    })
-    .catch(() => { /* the previous view stays */ });
+  stepSel?.addEventListener('change', () => { remember(STEP_KEY, stepSel.value); links(); });
+  sepSel?.addEventListener('change', () => { remember(SEP_KEY, sepSel.value); links(); });
+
+  return {
+    loadUnits() {
+      return fetch('/api/power', { credentials: 'same-origin' })
+        .then((r) => (r.ok ? r.json() : { units: [] }))
+        .then((j: { units?: { id: string; name: string }[] }) => {
+          const units = j.units || [];
+          const sel = el<HTMLSelectElement>(ids.unit);
+          if (sel) {
+            const current = sel.value;
+            sel.innerHTML = units.map((u) => '<option value="' + esc(u.id) + '">' + esc(u.name) + '</option>').join('');
+            if (current && units.some((u) => u.id === current)) sel.value = current;
+          }
+          return units;
+        })
+        .catch(() => []);
+    },
+    load(from, to) {
+      const id = el<HTMLSelectElement>(ids.unit)?.value;
+      if (!id) return;
+      span = { from, to };
+      links();
+      fetch('/api/power/units/' + encodeURIComponent(id) + '/report?from=' + from + '&to=' + to, { credentials: 'same-origin' })
+        .then((r) => r.json())
+        .then((j: { ok?: boolean; report?: PowerReport }) => {
+          if (j.ok && j.report && el<HTMLSelectElement>(ids.unit)?.value === id) render(j.report);
+        })
+        .catch(() => { /* the previous view stays */ });
+    },
+  };
+}
+
+// ── THE REPORTS PAGE'S POWER/UPS TAB ────────────────────────────────────────
+
+const reportsPage = (): PowerReportView => (pageReport ??= createPowerReport({
+  unit: 'rptPowerUnit', stats: 'rptPowerStats', thead: 'rptPowerThead', tbody: 'rptPowerTbody',
+  csv: 'rptPowerCsvLink', eventsCsv: 'rptPowerEventsCsvLink', step: 'rptPowerStep', sep: 'rptPowerSep',
+}));
+let pageReport: PowerReportView | undefined;
+
+/** Fill the Reports page's unit picker, and show its tab only when there is a unit. */
+export function loadPowerUnits(): Promise<void> {
+  return reportsPage().loadUnits().then((units) => {
+    const tab = document.querySelector<HTMLElement>('#rptTabBar [data-rtab="power"]');
+    if (tab) tab.hidden = units.length === 0;
+  });
+}
+
+/** Load the Reports page's Power/UPS tab for the window. */
+export function loadPowerReport(from: number, to: number): void {
+  reportsPage().load(from, to);
 }

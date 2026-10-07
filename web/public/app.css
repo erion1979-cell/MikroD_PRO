@@ -3886,6 +3886,8 @@
   50%{box-shadow:0 0 0 4px color-mix(in srgb,var(--accent-err) 25%,transparent)}}
 @keyframes pw-pulse-text{0%,100%{opacity:1}50%{opacity:.35}}
 /* The flow's boxes by state (power-ups.ts): output on / off, battery charge. */
+/* The Power/UPS page's Reports tab: the window and unit pickers in one wrapping row. */
+.pw-report-controls{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin-bottom:.75rem}
 .pw-node-ok{border:2px solid var(--accent-ok)!important}
 .pw-node-warn{border:2px solid var(--accent-warn)!important}
 .pw-node-bad{border:2px solid var(--accent-err)!important}

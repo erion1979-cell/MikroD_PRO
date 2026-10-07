@@ -28,7 +28,7 @@ fs.writeFileSync(ENTRY, [
   "export { statusOf, statusLabel, ago, duration, eventLine, brandsOf, modelsOf, unitLabel, batteryTone } from '../web/src/pages/power-ups.js';",
   "export { withGaps } from '../web/src/pages/power-ups-chart.js';",
   "export { flowLanes } from '../web/src/pages/power-flow-anim.js';",
-  "export { powerStats } from '../web/src/pages/reports-power.js';",
+  "export { powerStats, defaultSep, EXPORT_STEPS } from '../web/src/pages/reports-power.js';",
 ].join('\n') + '\n');
 const OUT = path.join(ROOT, 'testdata', '.power-ups.cjs');
 execFileSync(path.join(ROOT, 'web', 'node_modules', '.bin', 'esbuild'),
@@ -101,6 +101,15 @@ for (const [pct, tone] of [[100, 'ok'], [30, 'ok'], [29, 'warn'], [10, 'warn'], 
   assert.strictEqual(m.batteryTone(pct), tone, pct + ' % is not ' + tone);
 }
 assert.strictEqual(m.batteryTone(undefined), '', 'a unit reporting no charge is coloured');
+
+// ── THE EXPORT FOR EXCEL ────────────────────────────────────────────────────
+// The CSV form follows the language's decimal sign, as Excel does.
+assert.strictEqual(m.defaultSep('de-DE'), 'semicolon', 'a decimal-comma language got commas');
+assert.strictEqual(m.defaultSep('en-US'), 'comma', 'a decimal-point language got semicolons');
+// The page offers exactly the intervals the server folds into.
+const goSteps = [...fs.readFileSync(path.join(ROOT, 'internal', 'server', 'power_export.go'), 'utf8')
+  .matchAll(/"(\d+[mhd])":\s*[\d_]+/g)].map((x) => x[1]).sort();
+assert.deepStrictEqual(m.EXPORT_STEPS.map((x: string[]) => x[0]).sort(), goSteps, 'the page and the server disagree on the intervals');
 
 // ── DURATIONS AND AGES ──────────────────────────────────────────────────────
 assert.strictEqual(m.duration(48_000), '48 s');

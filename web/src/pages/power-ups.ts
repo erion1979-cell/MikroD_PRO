@@ -22,6 +22,8 @@ import type { Socket } from '../socket';
 import type { PowerCond, PowerState } from '../gen/payloads';
 import { drawPowerCharts, stopPowerCharts, type HistPoint } from './power-ups-chart';
 import { createPowerFlowAnim, flowLanes } from './power-flow-anim';
+import { createPowerReport, type PowerReportView } from './reports-power';
+import { dtVal, presetRange } from './reports';
 import { askConfirm } from '../dialog';
 
 type Cond = PowerCond;
@@ -211,7 +213,8 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
   let data: PowerList = { units: [], models: [], writableSites: [], polling: true };
   let sites: Record<string, string> = {};
   let routers: { id: string; label: string }[] = [];
-  let filter: Status | 'all' | 'down' = 'all';
+  let filter: Status | 'all' | 'down' | 'reports' = 'all';
+  let report: PowerReportView | null = null;
   let openId = '';
   const flowAnim = createPowerFlowAnim('pwFlow', 'pwFlowAnim');
   let range = '24h';
@@ -247,8 +250,11 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
     const add = el('pwAdd');
     if (add) add.hidden = data.writableSites.length === 0;
     if (openId && !data.units.some((u) => u.id === openId)) openId = '';
-    el('pwListView')!.hidden = !!openId;
-    el('pwUnitView')!.hidden = !openId;
+    const reports = filter === 'reports';
+    el('pwReportView')!.hidden = !reports;
+    el('pwListView')!.hidden = reports || !!openId;
+    el('pwUnitView')!.hidden = reports || !openId;
+    if (reports) return;
     if (openId) drawUnit();
     else drawList();
   }
@@ -339,7 +345,51 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
     });
     openId = '';
     draw();
+    if (filter === 'reports') void openReports();
   }));
+
+  // ── REPORTS ───────────────────────────────────────────────────────────────
+  //
+  // The Reports page's Power/UPS report, made once on first opening, with this
+  // tab's own unit, window and export pickers. A preset fills the two dates and
+  // loads; editing a date makes the preset Custom, and Load reads it.
+
+  async function openReports(): Promise<void> {
+    report ??= createPowerReport({
+      unit: 'pwrUnit', stats: 'pwrStats', thead: 'pwrThead', tbody: 'pwrTbody',
+      csv: 'pwrCsv', eventsCsv: 'pwrEventsCsv', step: 'pwrStep', sep: 'pwrSep',
+    });
+    const units = await report.loadUnits();
+    if (!units.length) {
+      el('pwrTbody')!.innerHTML = '<tr><td colspan="4" class="rpt-empty">No Power/UPS units to report on.</td></tr>';
+      return;
+    }
+    applyReportPreset();
+  }
+
+  /** The preset's window into the two dates, then load; Custom leaves them. */
+  function applyReportPreset(): void {
+    const r = presetRange(input<HTMLSelectElement>('pwrPreset').value, new Date());
+    if (r) {
+      input('pwrFrom').value = dtVal(r.from);
+      input('pwrTo').value = dtVal(r.to);
+    }
+    loadReport();
+  }
+
+  function loadReport(): void {
+    const from = new Date(input('pwrFrom').value).getTime();
+    const to = new Date(input('pwrTo').value).getTime();
+    if (!report || !(from < to)) return;
+    report.load(from, to);
+  }
+
+  el('pwrPreset')?.addEventListener('change', applyReportPreset);
+  el('pwrUnit')?.addEventListener('change', loadReport);
+  el('pwrLoad')?.addEventListener('click', loadReport);
+  for (const id of ['pwrFrom', 'pwrTo']) {
+    el(id)?.addEventListener('change', () => { input<HTMLSelectElement>('pwrPreset').value = 'custom'; });
+  }
 
   // ── ONE UNIT ──────────────────────────────────────────────────────────────
 

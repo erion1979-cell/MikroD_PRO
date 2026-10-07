@@ -201,7 +201,7 @@ func TestPowerHistoryFoldsMinutesIntoBuckets(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	h, err := d.PowerHistory(u.ID, []string{"input_v", "battery_pct"}, 0, 19*60_000, 600_000)
+	h, err := d.PowerHistory(u.ID, []string{"input_v", "battery_pct"}, 0, 19*60_000, 600_000, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,7 +219,7 @@ func TestPowerHistoryFoldsMinutesIntoBuckets(t *testing.T) {
 		t.Errorf("a measure with no rows is %v, want an empty list", b)
 	}
 	// The window bounds hold.
-	h, _ = d.PowerHistory(u.ID, []string{"input_v"}, 600_000, 19*60_000, 600_000)
+	h, _ = d.PowerHistory(u.ID, []string{"input_v"}, 600_000, 19*60_000, 600_000, 0)
 	if len(h["input_v"]) != 1 {
 		t.Errorf("a window from minute 10 returned %d buckets", len(h["input_v"]))
 	}
@@ -314,5 +314,25 @@ func TestAUnitsLastReadingIsKeptAndGoesWithIt(t *testing.T) {
 	}
 	if at, _, _ := d.PowerLast(u.ID); at != 0 {
 		t.Error("the last reading outlived its unit")
+	}
+}
+
+// A DAY STARTS AT LOCAL MIDNIGHT: with a +1 h zone, 23:30 UTC belongs to the
+// next local day, whose bucket begins at 23:00 UTC.
+func TestPowerHistoryBucketsFollowTheLocalClock(t *testing.T) {
+	d := openTest(t, t.TempDir())
+	u := newPowerUnit(t, d)
+	day := int64(86_400_000)
+	for _, ts := range []int64{10*day + 22*3_600_000, 10*day + 23*3_600_000 + 30*60_000} {
+		if err := d.RecordPowerMinute(u.ID, ts, 1, 1, 1, []PowerStat{{Key: "input_v", Avg: 1, Min: 1, Max: 1}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h, err := d.PowerHistory(u.ID, []string{"input_v"}, 0, 20*day, day, 3_600_000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pts := h["input_v"]; len(pts) != 2 || pts[0].TS != 10*day-3_600_000 || pts[1].TS != 11*day-3_600_000 {
+		t.Errorf("buckets %+v, want local midnights %d and %d", pts, 10*day-3_600_000, 11*day-3_600_000)
 	}
 }
