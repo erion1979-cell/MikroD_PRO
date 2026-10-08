@@ -94,7 +94,7 @@ func (s *Server) powerStart(noPool, history bool) {
 				log.Printf("[power] could not keep the last reading of %s: %v", unitID, err)
 			}
 		},
-		Changes: func(unitID string, cs []power.Change) {
+		Changes: func(unitID string, cs []power.Change, r *model.Reading) {
 			for _, c := range cs {
 				var err error
 				if c.Began {
@@ -107,7 +107,7 @@ func (s *Server) powerStart(noPool, history bool) {
 					log.Printf("[power] could not record %s on %s: %v", c.Kind, unitID, err)
 				}
 			}
-			s.dispatchPower(unitID, cs)
+			s.dispatchPower(unitID, cs, r)
 		},
 	}
 	if history {

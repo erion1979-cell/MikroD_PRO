@@ -11,6 +11,7 @@ import (
 	"mikrodash/internal/alertdispatch"
 	"mikrodash/internal/db"
 	"mikrodash/internal/power"
+	"mikrodash/internal/power/model"
 )
 
 // recordingDoer stands in for the network: every notification a channel would
@@ -85,7 +86,7 @@ func TestAPowerOutageIsSentToTheChannelsThatWantIt(t *testing.T) {
 		{Cond: power.Cond{Kind: power.KindMainsLost, Text: "Mains lost"}, Began: true, At: 1000},
 		// Undocumented bits are shown on the page and never sent.
 		{Cond: power.Cond{Kind: power.KindWarningBits, Code: 4, Text: "Warning bits 4"}, Began: true, At: 1000},
-	})
+	}, nil)
 	got := doer.wait(t, 2)
 	if len(got) != 2 {
 		t.Fatalf("sent %v, want the outage to both channels", got)
@@ -100,11 +101,41 @@ func TestAPowerOutageIsSentToTheChannelsThatWantIt(t *testing.T) {
 	p.srv.dispatchPower(u.ID, []power.Change{
 		{Cond: power.Cond{Kind: power.KindEvent, Code: 3, Text: "Output overload protection", Fault: true},
 			At: 49_000, Since: 1000},
-	})
+	}, nil)
 	got = doer.wait(t, 3)
 	if len(got) != 3 || !strings.Contains(got[2], "/user ") ||
 		!strings.Contains(got[2], "Output overload protection (code 03) cleared after 48 s") {
 		t.Errorf("after the overload cleared: %v", got)
+	}
+}
+
+// A MESSAGE CARRIES THE READING THAT SHOWED THE CHANGE, appended to {{detail}}
+// and as variables of its own; a Megatec UPS's battery % is marked estimated.
+func TestAPowerMessageCarriesTheReading(t *testing.T) {
+	r := &model.Reading{Values: map[string]float64{"input_v": 0, "output_v": 229.64, "load_pct": 41,
+		"battery_pct": 85, "battery_v": 12.63}}
+	f, _, _ := powerFired(power.Change{Cond: power.Cond{Kind: power.KindMainsLost}, Began: true}, r, false)
+	want := "running on battery · input 0.0 V · output 229.6 V · load 41 % · battery 85 % (12.6 V)"
+	if f.Detail != want {
+		t.Errorf("detail %q, want %q", f.Detail, want)
+	}
+	if f.Vars["batteryPct"] != "85" || f.Vars["outputV"] != "229.6" || f.Vars["load"] != "41" || f.Vars["batteryV"] != "12.6" {
+		t.Errorf("vars %v", f.Vars)
+	}
+	f, _, _ = powerFired(power.Change{Cond: power.Cond{Kind: power.KindBatteryLow, Text: "Battery low"}, Began: true},
+		&model.Reading{Values: map[string]float64{"battery_pct": 18}}, true)
+	if f.Detail != "Battery low · battery ~18 %" {
+		t.Errorf("an estimated battery: %q", f.Detail)
+	}
+
+	// And through the dispatcher, to the channels.
+	p, doer, u := powerNotifyFixture(t)
+	p.srv.dispatchPower(u.ID, []power.Change{
+		{Cond: power.Cond{Kind: power.KindMainsLost, Text: "Mains lost"}, Began: true, At: 1000},
+	}, r)
+	got := doer.wait(t, 2)
+	if len(got) != 2 || !strings.Contains(got[0], "running on battery · input 0.0 V") {
+		t.Errorf("sent %v, want the reading in the message", got)
 	}
 }
 
@@ -115,7 +146,7 @@ func TestAUsersChannelHearsOnlyAboutSitesTheyMayRead(t *testing.T) {
 	p.grant("pw-view@site-2")
 	p.srv.dispatchPower(u.ID, []power.Change{
 		{Cond: power.Cond{Kind: power.KindMainsLost, Text: "Mains lost"}, Began: true, At: 1000},
-	})
+	}, nil)
 	got := doer.wait(t, 2)
 	if len(got) != 1 || !strings.Contains(got[0], "/install ") {
 		t.Errorf("sent %v, want the install channel only", got)
@@ -127,7 +158,7 @@ func TestPowerNotificationsNeedTheDispatchSwitch(t *testing.T) {
 	p.srv.dispatch = alertdispatch.New(false, nil, doer, nil, func() int64 { return 0 })
 	p.srv.dispatchPower(u.ID, []power.Change{
 		{Cond: power.Cond{Kind: power.KindMainsLost, Text: "Mains lost"}, Began: true, At: 1000},
-	})
+	}, nil)
 	if got := doer.wait(t, 1); len(got) != 0 {
 		t.Errorf("with -alert-dispatch off, sent %v", got)
 	}
@@ -144,17 +175,17 @@ func TestPowerFiredReadsLikeAnAlert(t *testing.T) {
 		{power.Change{Cond: power.Cond{Kind: power.KindMainsLost}, At: 5_341_000, Since: 1000}, true, "Mains Restored",
 			"back on mains after 1 h 29 min"},
 		{power.Change{Cond: power.Cond{Kind: power.KindNotResponding}, Began: true, Initial: true}, false,
-			"Unit Not Responding", "no Modbus reply from the unit (already so when monitoring began)"},
+			"Unit Not Responding", "no reply from the unit (already so when monitoring began)"},
 		{power.Change{Cond: power.Cond{Kind: power.KindBatteryLow, Text: "Battery low"}, Began: true}, false,
 			"Battery Low", "Battery low"},
 	}
 	for _, c := range cases {
-		f, _, ok := powerFired(c.c)
+		f, _, ok := powerFired(c.c, nil, false)
 		if !ok || f.Up != c.up || f.AlertType != c.name || f.Detail != c.detail {
 			t.Errorf("%s: got %+v", c.c.Kind, f)
 		}
 	}
-	if _, _, ok := powerFired(power.Change{Cond: power.Cond{Kind: power.KindErrorBits}}); ok {
+	if _, _, ok := powerFired(power.Change{Cond: power.Cond{Kind: power.KindErrorBits}}, nil, false); ok {
 		t.Error("error bits are sent")
 	}
 }

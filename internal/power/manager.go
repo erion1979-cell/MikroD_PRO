@@ -103,8 +103,9 @@ type State struct {
 type Hooks struct {
 	// State is called after every poll of a unit.
 	State func(State)
-	// Changes is called when conditions began or ended.
-	Changes func(unitID string, cs []Change)
+	// Changes is called when conditions began or ended, with the reading that
+	// showed it: nil when a failed poll did (the unit stopped answering).
+	Changes func(unitID string, cs []Change, r *model.Reading)
 	// Minute is called with each finished minute of history.
 	Minute func(unitID string, m Minute)
 	// Restore supplies what a unit had when a previous run stopped: its
@@ -403,6 +404,7 @@ func (m *Manager) pollUnit(g *gateway, u Unit) {
 		return
 	}
 	var changes []Change
+	var cur *model.Reading
 	var done *Minute
 	var keep *model.Reading
 	us.state.Polls++
@@ -421,6 +423,7 @@ func (m *Manager) pollUnit(g *gateway, u Unit) {
 		us.state.Cause = CauseUnknown
 		us.state.Reading, us.state.LastOK, us.state.ReplyMs = &r, ms, reply
 		changes = us.tracker.Success(r, ms)
+		cur = &r
 		done = us.bucket.Add(reading, reply, ms)
 		if ms-us.kept >= keepEvery {
 			keep, us.kept = &r, ms
@@ -430,7 +433,7 @@ func (m *Manager) pollUnit(g *gateway, u Unit) {
 	m.mu.Unlock()
 
 	if len(changes) > 0 && m.hooks.Changes != nil {
-		m.hooks.Changes(u.ID, changes)
+		m.hooks.Changes(u.ID, changes, cur)
 	}
 	if done != nil {
 		m.emitMinutes([]unitMinute{{u.ID, *done}})

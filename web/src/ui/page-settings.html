@@ -448,6 +448,23 @@
                   <code>{{bgpPeer}}</code>
                   <code>{{timestamp}}</code>
                 </div>
+                <!-- Power/UPS alerts carry the unit's reading (internal/server/power_notify.go):
+                     the whole line is also appended to {{detail}}, so these are for a
+                     template that wants its own layout. -->
+                <p class="msg-vars-title" style="margin-top:.6rem">Power/UPS alerts</p>
+                <div class="msg-vars-list">
+                  <code>{{unitName}}</code>
+                  <code>{{site}}</code>
+                  <code>{{readings}}</code>
+                  <code>{{inputV}}</code>
+                  <code>{{outputV}}</code>
+                  <code>{{load}}</code>
+                  <code>{{batteryPct}}</code>
+                  <code>{{batteryV}}</code>
+                </div>
+                <p class="msg-vars-note">A Power/UPS alert's <code>{{detail}}</code> already ends with the unit's readings
+                  (input, output, load, battery); <code>{{routerName}}</code> is the unit and its site.
+                  Numbers come without units, so write <code>{{batteryPct}} %</code>.</p>
                 <p class="msg-vars-note">A variable that does not apply to an alert renders as empty.
                   <code>{{comment}}</code> is the comment set on the router for whatever the alert is
                   about - an interface, a NetWatch host, a VPN peer or a BGP peer.</p>

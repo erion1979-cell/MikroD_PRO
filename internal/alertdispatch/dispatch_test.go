@@ -278,3 +278,14 @@ func TestAnEmailAlertReachesTheMailer(t *testing.T) {
 		t.Errorf("the mailer received %+v", got)
 	}
 }
+
+// AN ALERT'S OWN VARIABLES reach the operator's template, and cannot replace
+// alertType, which stays the catalogue's label.
+func TestAnAlertsOwnVariablesReachTheTemplate(t *testing.T) {
+	s := notify.Settings{"notifTitle": "{{site}} Power", "notifBody": "{{alertType}} {{unitName}}: battery {{batteryPct}} %"}
+	m := Build(s, "INV-01 (Etronic)", "", alert.Fired{AlertType: "Mains Lost",
+		Vars: map[string]string{"site": "Etronic", "unitName": "INV-01", "batteryPct": "85", "alertType": "forged"}})
+	if m.Title != "Etronic Power" || m.Body != alert.LabelFor("Mains Lost")+" INV-01: battery 85 %" {
+		t.Errorf("title %q body %q", m.Title, m.Body)
+	}
+}

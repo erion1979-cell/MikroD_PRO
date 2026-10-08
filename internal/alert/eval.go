@@ -91,6 +91,10 @@ type Fired struct {
 	// this one, instead of the dedup guard returning early because it is
 	// already open. Only the RouterOS-update rule sets it — see below.
 	Supersede bool
+	// Vars are template variables of this alert's own, beside routerName,
+	// timestamp, detail and subject: a Power/UPS alert carries the unit's
+	// readings here. `alertType` cannot be overridden by one (alertdispatch.Build).
+	Vars map[string]string
 	// Silent means: show it, record it, do NOT notify.
 	//
 	// ── ONE PRODUCER, AND LIVE'S STRUCTURE IS THE REASON ──────────────────

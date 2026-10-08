@@ -102,9 +102,12 @@ func Build(s notify.Settings, routerName, timestamp string, f alert.Fired) Messa
 		"timestamp":  timestamp,
 		"detail":     f.Detail,
 		"subject":    f.Subject,
-		// LAST, so it wins over anything above.
-		"alertType": alert.LabelFor(f.AlertType),
 	}
+	for k, v := range f.Vars {
+		vars[k] = v
+	}
+	// LAST, so it wins over anything above.
+	vars["alertType"] = alert.LabelFor(f.AlertType)
 	str := func(k string) string { v, _ := s[k].(string); return v }
 
 	title := str("notifTitle")

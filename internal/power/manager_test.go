@@ -95,7 +95,7 @@ func newRecorder() *recorder {
 func (r *recorder) hooks() Hooks {
 	return Hooks{
 		State: func(s State) { r.mu.Lock(); r.states[s.UnitID] = s; r.mu.Unlock() },
-		Changes: func(id string, cs []Change) {
+		Changes: func(id string, cs []Change, _ *model.Reading) {
 			r.mu.Lock()
 			r.changes[id] = append(r.changes[id], cs...)
 			r.mu.Unlock()
