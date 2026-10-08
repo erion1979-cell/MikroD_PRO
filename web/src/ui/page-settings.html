@@ -466,6 +466,10 @@
                 <p class="msg-vars-note">A Power/UPS alert's <code>{{detail}}</code> already ends with the unit's readings
                   (input, output, load, battery); <code>{{routerName}}</code> is the unit and its site.
                   Numbers come without units, so write <code>{{batteryPct}} %</code>.</p>
+                <p class="msg-vars-note"><b>Optional parts:</b> <code>{{#comment}}</code>&hellip;<code>{{/comment}}</code>
+                  shows its text only when the alert has a comment, and <code>{{^comment}}</code>&hellip;<code>{{/comment}}</code>
+                  only when it has none, with any variable in place of <code>comment</code>. For example
+                  <code>{{detail}}{{#comment}} Commented: {{comment}}{{/comment}}{{^comment}} Not commented{{/comment}}</code>.</p>
                 <p class="msg-vars-note">A variable that does not apply to an alert renders as empty.
                   <code>{{comment}}</code> is the comment set on the router for whatever the alert is
                   about - an interface, a NetWatch host, a VPN peer or a BGP peer.</p>

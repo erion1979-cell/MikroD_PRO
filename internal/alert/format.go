@@ -28,25 +28,66 @@ var placeholder = regexp.MustCompile(`\{\{(\w+)\}\}`)
 //
 // Control characters are stripped and the result is capped at 200 — IN THAT
 // ORDER, so the cap counts what survives rather than what arrived.
+//
+// ── OPTIONAL PARTS ──────────────────────────────────────────────────────────
+//
+// `{{#key}}…{{/key}}` keeps its text only when key renders non-blank, and
+// `{{^key}}…{{/key}}` only when it renders blank (absent, empty or spaces):
+// "{{detail}}{{#comment}} Commented: {{comment}}{{/comment}}" drops the word
+// when the router has no comment, and "{{^comment}}Not commented{{/comment}}"
+// says so instead. Mustache's sections, without its lists or escaping. A
+// section may hold others; an opener with no closer is left as written.
 func Render(tpl string, vars map[string]any) string {
-	return placeholder.ReplaceAllStringFunc(tpl, func(m string) string {
-		k := placeholder.FindStringSubmatch(m)[1]
-		v, present := vars[k]
-		if !present {
-			return ""
-		}
-		s := jsString(v)
-		s = strings.Map(func(r rune) rune {
-			if r <= 0x1f || r == 0x7f {
-				return -1
-			}
-			return r
-		}, s)
-		if len(s) > 200 {
-			s = s[:200]
-		}
-		return s
+	return placeholder.ReplaceAllStringFunc(sections(tpl, vars), func(m string) string {
+		return value(vars, placeholder.FindStringSubmatch(m)[1])
 	})
+}
+
+var opener = regexp.MustCompile(`\{\{([#^])(\w+)\}\}`)
+
+// sections resolves the optional parts, outermost first.
+func sections(tpl string, vars map[string]any) string {
+	var out strings.Builder
+	for {
+		loc := opener.FindStringSubmatchIndex(tpl)
+		if loc == nil {
+			out.WriteString(tpl)
+			return out.String()
+		}
+		kind, key := tpl[loc[2]:loc[3]], tpl[loc[4]:loc[5]]
+		closer := "{{/" + key + "}}"
+		end := strings.Index(tpl[loc[1]:], closer)
+		if end < 0 {
+			out.WriteString(tpl[:loc[1]])
+			tpl = tpl[loc[1]:]
+			continue
+		}
+		out.WriteString(tpl[:loc[0]])
+		body := tpl[loc[1] : loc[1]+end]
+		if (strings.TrimSpace(value(vars, key)) != "") == (kind == "#") {
+			out.WriteString(sections(body, vars))
+		}
+		tpl = tpl[loc[1]+end+len(closer):]
+	}
+}
+
+// value is one variable as it renders.
+func value(vars map[string]any, k string) string {
+	v, present := vars[k]
+	if !present {
+		return ""
+	}
+	s := jsString(v)
+	s = strings.Map(func(r rune) rune {
+		if r <= 0x1f || r == 0x7f {
+			return -1
+		}
+		return r
+	}, s)
+	if len(s) > 200 {
+		s = s[:200]
+	}
+	return s
 }
 
 var (

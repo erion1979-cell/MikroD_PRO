@@ -117,3 +117,34 @@ func TestControlCharactersAreStrippedBeforeTheCap(t *testing.T) {
 		}
 	}
 }
+
+// OPTIONAL PARTS: a section shows only when its variable has a value, an
+// inverted one only when it has none, and they nest.
+func TestOptionalPartsFollowTheirVariable(t *testing.T) {
+	tpl := "{{detail}}{{#comment}} Commented: {{comment}}{{/comment}}{{^comment}} Not commented{{/comment}}"
+	cases := []struct {
+		vars map[string]any
+		want string
+	}{
+		{map[string]any{"detail": "ether6 went down", "comment": "Rack01 uplink"}, "ether6 went down Commented: Rack01 uplink"},
+		{map[string]any{"detail": "ether6 went down", "comment": ""}, "ether6 went down Not commented"},
+		{map[string]any{"detail": "ether6 went down", "comment": "  "}, "ether6 went down Not commented"},
+		{map[string]any{"detail": "CPU at 91%"}, "CPU at 91% Not commented"},
+	}
+	for _, c := range cases {
+		if got := Render(tpl, c.vars); got != c.want {
+			t.Errorf("%v: %q, want %q", c.vars, got, c.want)
+		}
+	}
+	nested := "{{#site}}[{{site}}{{#comment}} - {{comment}}{{/comment}}]{{/site}}"
+	if got := Render(nested, map[string]any{"site": "A", "comment": "B"}); got != "[A - B]" {
+		t.Errorf("nested: %q", got)
+	}
+	if got := Render(nested, map[string]any{"comment": "B"}); got != "" {
+		t.Errorf("an outer section without its variable kept %q", got)
+	}
+	// An opener with no closer is text, not a swallowed message.
+	if got := Render("{{#comment}}Commented: {{comment}}", map[string]any{"comment": "x"}); got != "{{#comment}}Commented: x" {
+		t.Errorf("unclosed: %q", got)
+	}
+}
