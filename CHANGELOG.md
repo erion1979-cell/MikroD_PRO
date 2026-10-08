@@ -2,6 +2,19 @@
 
 All notable changes to MikroDash will be documented in this file.
 
+## [0.8.71-pro.10] - Optional parts in message templates
+
+Built on MikroDash 0.8.71, like 0.8.71-pro.9.
+
+### New
+
+- **Optional parts in notification templates.** `{{#comment}} … {{/comment}}` shows its text only
+  when the alert has a comment, and `{{^comment}} … {{/comment}}` only when it has none; any
+  variable works in place of `comment`, in the title and both bodies, and parts may nest. So
+  `{{detail}}{{#comment}} Commented: {{comment}}{{/comment}}{{^comment}} Not commented{{/comment}}`
+  no longer ends with an empty "Commented:" for an interface without a comment. Explained under
+  the variables in Settings, Notifications.
+
 ## [0.8.71-pro.9] - Notifications that say more
 
 Built on MikroDash 0.8.71, like 0.8.71-pro.8.
