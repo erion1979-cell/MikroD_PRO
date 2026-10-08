@@ -2,6 +2,28 @@
 
 All notable changes to MikroDash will be documented in this file.
 
+## [0.8.71-pro.9] - Notifications that say more
+
+Built on MikroDash 0.8.71, like 0.8.71-pro.8.
+
+### New
+
+- **Power/UPS notifications carry the unit's readings.** "Mains lost on INV-01 (Site A): running
+  on battery · input 0.0 V · output 229.9 V · load 23 % · battery 73 % (98.4 V)", with "~" on a
+  battery % MikroDash estimated. The readings are added to `{{detail}}`, so existing templates
+  show them, and are template variables of their own: `{{unitName}}`, `{{site}}`,
+  `{{readings}}`, `{{inputV}}`, `{{outputV}}`, `{{load}}`, `{{batteryPct}}`, `{{batteryV}}`.
+
+### Fixed
+
+- **The template variables Settings offers are filled.** `{{comment}}`, `{{ifaceName}}`,
+  `{{status}}`, `{{cpuLoad}}`, `{{pingLoss}}`, `{{pingTarget}}`, `{{pingRtt}}`, `{{vpnPeer}}`,
+  `{{host}}`, `{{netwatchName}}` and `{{bgpPeer}}` were listed and always came out empty. Each
+  alert now fills its own: the interface, NetWatch host, VPN peer or BGP peer and its comment on
+  the router, its status, the CPU load, the ping target, loss and round trip. `{{subject}}`,
+  which always worked, is now listed too.
+- **"Not responding" no longer says "no Modbus reply"**, which was wrong for a Megatec UPS.
+
 ## [0.8.71-pro.8] - Megatec UPSs, and online units drawn as they work
 
 Built on MikroDash 0.8.71, like 0.8.71-pro.7.
