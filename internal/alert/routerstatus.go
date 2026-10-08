@@ -48,10 +48,12 @@ func (e *Evaluator) RouterStatus(r Router, up bool) []Fired {
 			AlertType:   "Router Online",
 			ResolveType: "router_offline",
 			Detail:      "The router is reachable again",
+			Vars:        tplVars("status", "online"),
 		})
 	}
 	return e.emit(r, Fired{
 		AlertType: "Router Offline",
 		Detail:    "The router is not responding",
+		Vars:      tplVars("status", "offline"),
 	})
 }

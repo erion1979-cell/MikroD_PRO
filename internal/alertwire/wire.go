@@ -372,7 +372,7 @@ func ifaces(in []collect.Interface) []alert.Interface {
 func tunnels(in []collect.Tunnel) []alert.VPNTunnel {
 	out := make([]alert.VPNTunnel, 0, len(in))
 	for _, t := range in {
-		out = append(out, alert.VPNTunnel{Name: t.Name, State: t.State})
+		out = append(out, alert.VPNTunnel{Name: t.Name, State: t.State, Comment: t.Comment})
 	}
 	return out
 }
@@ -389,7 +389,7 @@ func hosts(in []collect.NetwatchHost) []alert.NetwatchHost {
 			status = "unknown"
 		}
 		out = append(out, alert.NetwatchHost{
-			ID: h.ID, Host: h.Host, Name: h.Name, Status: status, Since: h.Since,
+			ID: h.ID, Host: h.Host, Name: h.Name, Status: status, Since: h.Since, Comment: h.Comment,
 		})
 	}
 	return out

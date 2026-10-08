@@ -309,6 +309,7 @@ func (e *Evaluator) PingUpdate(r Router, target *string, loss, rtt *float64) []F
 			Subject:   subject,
 			Detail:    "Ping loss to " + rawTarget(target) + " is " + trimNum(*loss) + "%",
 			Value:     *loss,
+			Vars:      pingVars(subject, *loss, rtt, "lossy"),
 		})
 	case !isLoss && seen && prev:
 		out = e.emit(r, Fired{
@@ -317,6 +318,7 @@ func (e *Evaluator) PingUpdate(r Router, target *string, loss, rtt *float64) []F
 			ResolveType: "ping_loss",
 			Subject:     subject,
 			Detail:      "Ping to " + rawTarget(target) + " restored",
+			Vars:        pingVars(subject, *loss, rtt, "restored"),
 		})
 	}
 	e.prevPingAlert[key] = isLoss
@@ -327,6 +329,8 @@ func (e *Evaluator) PingUpdate(r Router, target *string, loss, rtt *float64) []F
 type VPNTunnel struct {
 	Name  string
 	State string // "active" | "stale" | "never"
+	// Comment is the router's comment on the peer, for {{comment}}.
+	Comment string
 }
 
 // VPNUpdate evaluates one vpn:update event.
@@ -363,6 +367,7 @@ func (e *Evaluator) VPNUpdate(r Router, tunnels []VPNTunnel) []Fired {
 					AlertType: "VPN Disconnected",
 					Subject:   t.Name,
 					Detail:    "VPN peer " + t.Name + " disconnected",
+					Vars:      tplVars("vpnPeer", t.Name, "status", t.State, "comment", t.Comment),
 				})...)
 			} else {
 				out = append(out, e.emit(r, Fired{
@@ -371,6 +376,7 @@ func (e *Evaluator) VPNUpdate(r Router, tunnels []VPNTunnel) []Fired {
 					ResolveType: "vpn_disconnected",
 					Subject:     t.Name,
 					Detail:      "VPN peer " + t.Name + " connected",
+					Vars:        tplVars("vpnPeer", t.Name, "status", t.State, "comment", t.Comment),
 				})...)
 			}
 		}
@@ -448,6 +454,7 @@ func (e *Evaluator) IfstatusUpdate(r Router, ifaces []Interface) []Fired {
 					Subject:   i.Name,
 					Detail:    i.Name + " went down",
 					IfaceType: kind,
+					Vars:      tplVars("ifaceName", i.Name, "status", "down", "comment", i.Comment),
 				})...)
 			} else {
 				out = append(out, e.emit(r, Fired{
@@ -457,6 +464,7 @@ func (e *Evaluator) IfstatusUpdate(r Router, ifaces []Interface) []Fired {
 					Subject:     i.Name,
 					Detail:      i.Name + " came up",
 					IfaceType:   kind,
+					Vars:        tplVars("ifaceName", i.Name, "status", "up", "comment", i.Comment),
 				})...)
 			}
 		}
@@ -475,6 +483,8 @@ type NetwatchHost struct {
 	Host   string
 	Name   string
 	Status string // "up" | "down" | "unknown"
+	// Comment is the router's comment on the host, for {{comment}}.
+	Comment string
 	// Since is when the router says this host last changed state. See
 	// collect.NetwatchHost.Since, and the outage rule below.
 	Since string
@@ -557,6 +567,9 @@ func (e *Evaluator) NetwatchUpdate(r Router, hosts []NetwatchHost) []Fired {
 			if name != h.Host {
 				desc = name + " (" + h.Host + ")"
 			}
+			nv := func(status string) map[string]string {
+				return tplVars("netwatchName", name, "host", h.Host, "status", status, "comment", h.Comment)
+			}
 			if missedOutage {
 				// THE DOWN FIRST, so the recovery below has a row to resolve:
 				// `emit` only reports an "up" when something was actually
@@ -567,6 +580,7 @@ func (e *Evaluator) NetwatchUpdate(r Router, hosts []NetwatchHost) []Fired {
 					AlertType: "Host Down",
 					Subject:   name,
 					Detail:    "NetWatch host " + desc + " was unreachable",
+					Vars:      nv("down"),
 				})...)
 				out = append(out, e.emit(r, Fired{
 					Up:          true,
@@ -574,12 +588,14 @@ func (e *Evaluator) NetwatchUpdate(r Router, hosts []NetwatchHost) []Fired {
 					ResolveType: "host_down",
 					Subject:     name,
 					Detail:      "NetWatch host " + desc + " is reachable again (the router saw it return at " + h.Since + ")",
+					Vars:        nv("up"),
 				})...)
 			} else if isDown {
 				out = append(out, e.emit(r, Fired{
 					AlertType: "Host Down",
 					Subject:   name,
 					Detail:    "NetWatch host " + desc + " is unreachable",
+					Vars:      nv("down"),
 				})...)
 			} else {
 				out = append(out, e.emit(r, Fired{
@@ -588,6 +604,7 @@ func (e *Evaluator) NetwatchUpdate(r Router, hosts []NetwatchHost) []Fired {
 					ResolveType: "host_down",
 					Subject:     name,
 					Detail:      "NetWatch host " + desc + " is reachable",
+					Vars:        nv("up"),
 				})...)
 			}
 		}
@@ -723,6 +740,7 @@ func (e *Evaluator) cpuRule(r Router, cpuLoad *float64) []Fired {
 			// not what any recipient is being alerted at.
 			Detail: "CPU at " + trimNum(*cpuLoad) + "%",
 			Value:  *cpuLoad,
+			Vars:   tplVars("cpuLoad", trimNum(*cpuLoad), "status", "high"),
 		})
 	case !isHigh && e.prevCPUAlert != nil && *e.prevCPUAlert:
 		out = e.emit(r, Fired{
@@ -730,6 +748,7 @@ func (e *Evaluator) cpuRule(r Router, cpuLoad *float64) []Fired {
 			AlertType:   "CPU Normal",
 			ResolveType: "high_cpu",
 			Detail:      "CPU back to " + trimNum(*cpuLoad) + "% (below threshold)",
+			Vars:        tplVars("cpuLoad", trimNum(*cpuLoad), "status", "normal"),
 		})
 	}
 	// RECORDED WHETHER OR NOT ANYTHING FIRED, and after the decision. A toggle
@@ -999,6 +1018,7 @@ func (e *Evaluator) RoutingUpdate(r Router, peers []BGPPeer) []Fired {
 			where = peer + " (" + p.RemoteAddr + ")"
 		}
 		isEst := p.State == "established"
+		bv := tplVars("bgpPeer", peer, "host", p.RemoteAddr, "status", p.State, "comment", p.Description)
 
 		// ── 1. STATE ───────────────────────────────────────────────────────
 		//
@@ -1013,6 +1033,7 @@ func (e *Evaluator) RoutingUpdate(r Router, peers []BGPPeer) []Fired {
 				out = append(out, e.emit(r, Fired{
 					AlertType: "BGP Peer Down",
 					Subject:   peer,
+					Vars:      bv,
 					Detail:    "BGP peer " + where + " left established (" + state + ")",
 				})...)
 			} else {
@@ -1021,6 +1042,7 @@ func (e *Evaluator) RoutingUpdate(r Router, peers []BGPPeer) []Fired {
 					AlertType:   "BGP Peer Up",
 					ResolveType: "bgp_peer_down",
 					Subject:     peer,
+					Vars:        bv,
 					Detail:      "BGP peer " + where + " is established",
 				})...)
 			}
@@ -1050,6 +1072,7 @@ func (e *Evaluator) RoutingUpdate(r Router, peers []BGPPeer) []Fired {
 					out = append(out, e.emit(r, Fired{
 						AlertType: "BGP Prefix Change",
 						Subject:   peer,
+						Vars:      bv,
 						Detail: peer + ": " + dir + trimNum(delta) + " prefixes (" +
 							trimNum(oldPfx) + " → " + trimNum(now) + ")",
 					})...)
@@ -1062,6 +1085,7 @@ func (e *Evaluator) RoutingUpdate(r Router, peers []BGPPeer) []Fired {
 						AlertType:   "BGP Prefixes Settled",
 						ResolveType: "bgp_prefix_change",
 						Subject:     peer,
+						Vars:        bv,
 						Detail:      peer + ": prefix count steady at " + trimNum(now),
 					})...)
 					e.prevBGPPfxAlert[p.Key] = false
@@ -1076,6 +1100,7 @@ func (e *Evaluator) RoutingUpdate(r Router, peers []BGPPeer) []Fired {
 				out = append(out, e.emit(r, Fired{
 					AlertType: "BGP Session Flapping",
 					Subject:   peer,
+					Vars:      bv,
 					Detail:    "BGP session " + where + " is flapping",
 				})...)
 			} else if _, seen := e.prevBGPFlap[p.Key]; seen {
@@ -1089,6 +1114,7 @@ func (e *Evaluator) RoutingUpdate(r Router, peers []BGPPeer) []Fired {
 					AlertType:   "BGP Session Stable",
 					ResolveType: "bgp_session_flapping",
 					Subject:     peer,
+					Vars:        bv,
 					Detail:      "BGP session " + where + " has stopped flapping",
 				})...)
 			}
@@ -1108,6 +1134,7 @@ func (e *Evaluator) RoutingUpdate(r Router, peers []BGPPeer) []Fired {
 				out = append(out, e.emit(r, Fired{
 					AlertType: "BGP Hold Timer Warning",
 					Subject:   peer,
+					Vars:      bv,
 					Detail: peer + ": hold-time=" + trimNum(*p.HoldTime) +
 						"s, keepalive=0",
 				})...)
@@ -1117,6 +1144,7 @@ func (e *Evaluator) RoutingUpdate(r Router, peers []BGPPeer) []Fired {
 					AlertType:   "BGP Hold Timer OK",
 					ResolveType: "bgp_hold_timer_warning",
 					Subject:     peer,
+					Vars:        bv,
 					Detail:      peer + ": hold timer no longer misconfigured",
 				})...)
 			}
@@ -1132,4 +1160,27 @@ func (e *Evaluator) RoutingUpdate(r Router, peers []BGPPeer) []Fired {
 	capMap(e.prevBGPHold, live)
 	capMap(e.prevBGPPfxAlert, live)
 	return out
+}
+
+// tplVars are an alert's own template variables (Fired.Vars), from key/value
+// pairs. They are what the Settings page's Message Templates list offers:
+// {{ifaceName}}, {{status}}, {{comment}}, {{cpuLoad}}, {{pingLoss}},
+// {{pingTarget}}, {{pingRtt}}, {{vpnPeer}}, {{host}}, {{netwatchName}},
+// {{bgpPeer}}. A variable an alert does not set renders empty.
+func tplVars(kv ...string) map[string]string {
+	out := make(map[string]string, len(kv)/2)
+	for i := 0; i+1 < len(kv); i += 2 {
+		out[kv[i]] = kv[i+1]
+	}
+	return out
+}
+
+// pingVars are a ping alert's: the target, the loss and, when measured, the
+// round-trip time in milliseconds.
+func pingVars(target string, loss float64, rtt *float64, status string) map[string]string {
+	v := tplVars("pingTarget", target, "pingLoss", trimNum(loss), "status", status)
+	if rtt != nil {
+		v["pingRtt"] = trimNum(*rtt)
+	}
+	return v
 }
