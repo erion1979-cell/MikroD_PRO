@@ -162,6 +162,21 @@ const SUN = 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.
  * `data-bs-theme` is set alongside `data-theme` because Bootstrap reads its own
  * attribute and knows nothing about this one.
  */
+/**
+ * The header's theme button shows the mode a click switches TO, not the one
+ * in use: a moon and "Dark mode" while light, a sun and "Light mode" while
+ * dark (asked for 2026-10-08).
+ */
+function drawThemeToggle(scheme: string): void {
+  const toLight = scheme !== 'light';
+  el('themeIconPath')?.setAttribute('d', toLight ? SUN : MOON);
+  const b = el('themeToggle');
+  if (b) {
+    b.title = toLight ? 'Switch to light mode' : 'Switch to dark mode';
+    b.setAttribute('aria-label', b.title);
+  }
+}
+
 export function applyPalette(palette: string, scheme?: string): void {
   const s = scheme || root().getAttribute('data-theme') || 'dark';
   if (!palette || palette === 'default') {
@@ -173,8 +188,7 @@ export function applyPalette(palette: string, scheme?: string): void {
   root().setAttribute('data-bs-theme', s === 'light' ? 'light' : 'dark');
   lsSet(KEYS.palette, palette || 'default');
   lsSet(KEYS.theme, s);
-  const p = el('themeIconPath');
-  if (p) p.setAttribute('d', s === 'light' ? SUN : MOON);
+  drawThemeToggle(s);
   reapplyTextVars();
   reapplyBgVars();
   syncSwatches();
@@ -196,8 +210,7 @@ export function applyPalette(palette: string, scheme?: string): void {
 export function applyTheme(t: string): void {
   root().setAttribute('data-theme', t);
   root().setAttribute('data-bs-theme', t === 'light' ? 'light' : 'dark');
-  const p = el('themeIconPath');
-  if (p) p.setAttribute('d', t === 'light' ? SUN : MOON);
+  drawThemeToggle(t);
   lsSet(KEYS.theme, t);
   reapplyTextVars();
   reapplyBgVars();
