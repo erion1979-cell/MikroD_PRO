@@ -127,7 +127,7 @@ func main() {
 			case <-time.After(*interval):
 			}
 		}
-		poll(read, tracker, *raw)
+		poll(read, tracker, *raw, addr, mdl)
 	}
 }
 
@@ -198,7 +198,7 @@ func megatecReader(c *megatec.Client, mdl *model.Model) reader {
 	}
 }
 
-func poll(read reader, tr *power.Tracker, raw bool) {
+func poll(read reader, tr *power.Tracker, raw bool, addr string, mdl *model.Model) {
 	began := time.Now()
 	stamp := began.Format("15:04:05")
 	r, lines, err := read()
@@ -213,8 +213,10 @@ func poll(read reader, tr *power.Tracker, raw bool) {
 		report(tr.Failure(began.UnixMilli(), power.CauseUnknown))
 		return
 	case err != nil:
-		fmt.Printf("%s  NO READING: %v\n", stamp, err)
-		report(tr.Failure(began.UnixMilli(), power.CauseOf(err)))
+		why := power.CauseOf(err)
+		fmt.Printf("%s  NO READING - %s\n", stamp, whyNoReading(why, addr, mdl))
+		fmt.Printf("    (%v)\n", err)
+		report(tr.Failure(began.UnixMilli(), why))
 		return
 	}
 
@@ -248,6 +250,30 @@ func poll(read reader, tr *power.Tracker, raw bool) {
 	}
 	report(tr.Success(r, began.UnixMilli()))
 	fmt.Println()
+}
+
+// whyNoReading says which device a failed poll stopped at, the converter or
+// the unit behind it, and what to check there: the same split the Power/UPS
+// page makes (internal/power/cause.go).
+func whyNoReading(why power.Cause, addr string, mdl *model.Model) string {
+	unit := "inverter"
+	if mdl.Kind == "ups" {
+		unit = "UPS"
+	}
+	switch why {
+	case power.CauseConverter:
+		return "CONVERTER NOT REACHABLE at " + addr + ".\n" +
+			"    It is off, unplugged, on another network, or the IP address or port is wrong."
+	case power.CauseUnit:
+		hint := "the RS485 wires (A/B), the slave ID, 9600 8N1 and that the converter is in Modbus gateway mode."
+		if mdl.Protocol == "megatec" {
+			hint = "the RS232 cable (try swapping TX and RX), 2400 8N1 and that the converter is in transparent mode."
+		}
+		return "CONVERTER OK, " + strings.ToUpper(unit) + " SILENT: the converter at " + addr +
+			" answers, but the " + unit + " behind it does not.\n" +
+			"    The " + unit + " is off, or check " + hint
+	}
+	return "no usable reply from " + addr + "."
 }
 
 func report(cs []power.Change) {
