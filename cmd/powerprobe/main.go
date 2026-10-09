@@ -238,10 +238,8 @@ func poll(read reader, tr *power.Tracker, raw bool) {
 	}
 	sort.Strings(flags)
 	fmt.Printf("    flags  %s\n", strings.Join(flags, " "))
-	for _, k := range model.RawKeys {
-		if v, ok := r.Raw[k]; ok {
-			fmt.Printf("    %-22s %8d\n", k, v)
-		}
+	if r.Version != "" {
+		fmt.Printf("    %-22s %s\n", "Firmware", r.Version)
 	}
 	if raw {
 		for _, l := range lines {

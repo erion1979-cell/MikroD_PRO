@@ -25,9 +25,9 @@
     "reg": 32,
     "bits": { "mains_ok": 0, "charger_on": 1, "inverter_on": 2, "output_on": 8 }
   },
-  "raw": [
-    { "key": "warning_bits", "reg": 33 },
-    { "key": "error_bits",   "reg": 34 }
+  "version": [
+    { "reg": 28 },
+    { "reg": 29 }
   ],
   "event": {
     "reg": 35,

@@ -115,8 +115,10 @@ func TestTheVerifiedReadingsDecodeAsDocumented(t *testing.T) {
 			if r.EventCode != 0 || r.EventText != "No event" {
 				t.Errorf("event %d %q, want 0 \"No event\"", r.EventCode, r.EventText)
 			}
-			if r.Raw["warning_bits"] != 0 || r.Raw["error_bits"] != 0 {
-				t.Errorf("raw %v, want zeros", r.Raw)
+			// 028 and 029 are the firmware versions, in hundredths (the
+			// manufacturer, 2026-10-09).
+			if r.Version != "1.05 · 1.22" {
+				t.Errorf("version %q, want \"1.05 · 1.22\"", r.Version)
 			}
 		})
 	}
@@ -236,7 +238,8 @@ func TestABrokenDefinitionIsRefused(t *testing.T) {
 		"an unknown flag":            func(d map[string]any) { d["flags"].(map[string]any)["bits"].(map[string]any)["eco"] = 3 },
 		"a bit past 15":              func(d map[string]any) { d["flags"].(map[string]any)["bits"].(map[string]any)["output_on"] = 16 },
 		"no mains flag":              func(d map[string]any) { delete(d["flags"].(map[string]any)["bits"].(map[string]any), "mains_ok") },
-		"an unknown raw register":    func(d map[string]any) { d["raw"].([]any)[0].(map[string]any)["key"] = "alarm_bits" },
+		"a version outside reads":    func(d map[string]any) { d["version"].([]any)[0].(map[string]any)["reg"] = 36 },
+		"an old raw register":        func(d map[string]any) { d["raw"] = []any{map[string]any{"key": "warning_bits", "reg": 33}} },
 		"an event code that is text": func(d map[string]any) { d["event"].(map[string]any)["codes"].(map[string]any)["x"] = "?" },
 		"no not-fault codes":         func(d map[string]any) { d["event"].(map[string]any)["notFault"] = []any{} },
 		"an unknown kind":            func(d map[string]any) { d["kind"] = "generator" },

@@ -1,9 +1,10 @@
 package power
 
 // NoticeKey is the notification-catalogue key (internal/alert/types.go) a
-// condition of this kind is sent as, or "" for a kind that is shown on the page
-// but not sent: the warning and error bit registers, whose meaning the
-// manufacturer has not documented, so a message could say nothing useful.
+// condition of this kind is sent as, or "" for a kind this build does not raise:
+// "warning_bits" and "error_bits", which earlier builds recorded from registers
+// 033/034 and an older database may still hold open. The manufacturer advises
+// the event code in 035 instead (2026-10-09), so they are no longer read.
 func NoticeKey(k Kind) string {
 	switch k {
 	case KindMainsLost:
@@ -22,5 +23,4 @@ func NoticeKey(k Kind) string {
 
 // Kinds is every kind of condition, for the ledger that holds NoticeKey and
 // the catalogue to each other.
-var Kinds = []Kind{KindMainsLost, KindOutputOff, KindEvent, KindBatteryLow, KindWarningBits,
-	KindErrorBits, KindNotResponding}
+var Kinds = []Kind{KindMainsLost, KindOutputOff, KindEvent, KindBatteryLow, KindNotResponding}

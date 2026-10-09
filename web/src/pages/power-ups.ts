@@ -623,6 +623,7 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
       ['Reply time', st?.answered ? Math.round(st.replyMs) + ' ms' : '—'],
       ['Success', success == null ? '—' : success + ' %'],
       ['Model', (u.producerName + ' ' + u.modelName).trim() || u.model],
+      ...(st?.hasReading && st.version ? [['Firmware', st.version]] : []),
       ...(u.topology ? [['Type', online ? 'Online (double conversion)' : 'Offline']] : []),
       ...(router ? [['Router', router.label]] : []),
     ].map(([k, val]) => `<span><span class="muted-note">${k}</span> <span class="pw-mono">${esc(val)}</span></span>`).join('');

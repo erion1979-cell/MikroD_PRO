@@ -912,7 +912,7 @@ export interface PowerState {
   mode: string;
   values: Record<string, number> | null;
   flags: Record<string, boolean> | null;
-  raw: Record<string, number> | null;
+  version: string;
   apparentVa: number | null;
   eventCode: number;
   eventText: string;

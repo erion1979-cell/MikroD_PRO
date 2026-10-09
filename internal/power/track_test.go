@@ -209,14 +209,17 @@ func TestWhatHappenedDuringSilenceIsSettledByTheNextReading(t *testing.T) {
 		"-mains_lost@9000(1000) -not_responding@9000(2000)")
 }
 
-func TestUndocumentedBitsAreReportedByValue(t *testing.T) {
+// RE-AIMED 2026-10-09: registers 033/034 (warning and error bits) were each a
+// condition of their own. The manufacturer advises the event code in 035
+// instead, so they are no longer read and raise nothing; a bit pattern there
+// is not an event. And a condition an older build left open ends at the
+// first reading, as any that is no longer true.
+func TestWarningAndErrorBitsRaiseNothing(t *testing.T) {
 	tr := NewTracker()
-	tr.Success(reading(t, nil), 1000)
-	expect(t, "warning 4", tr.Success(reading(t, map[int]uint16{33: 4}), 2000), "+warning_bits:4@2000")
-	expect(t, "warning 6, error 1", tr.Success(reading(t, map[int]uint16{33: 6, 34: 1}), 3000),
-		"-warning_bits:4@3000(2000) +error_bits:1@3000 +warning_bits:6@3000")
-	expect(t, "clear", tr.Success(reading(t, nil), 4000),
-		"-error_bits:1@4000(3000) -warning_bits:6@4000(3000)")
+	tr.Restore([]Change{{Cond: Cond{Kind: "warning_bits", Code: 4, Text: "Warning bits 4"}, Began: true, At: 500}})
+	expect(t, "an old open condition ends", tr.Success(reading(t, map[int]uint16{33: 4, 34: 1}), 1000),
+		"-warning_bits:4@1000(500)")
+	expect(t, "bits set", tr.Success(reading(t, map[int]uint16{33: 6, 34: 1}), 2000), "")
 }
 
 func TestOpenListsWhatIsTrueNow(t *testing.T) {

@@ -10,7 +10,7 @@
 // ── ONE RULE FOR EVERY KIND OF EVENT ────────────────────────────────────────
 //
 // A reading yields the set of CONDITIONS that are true right now: mains lost,
-// output off, an event code, battery low, warning or error bits set. A change is
+// output off, an event code, battery low. A change is
 // simply a condition that appears (it began) or disappears (it ended) between
 // one reading and the next. That is the whole event model, and it is why an
 // event code going straight from 03 to 06 needs no special case: 03 ends and 06
@@ -24,7 +24,6 @@
 package power
 
 import (
-	"fmt"
 	"sort"
 
 	"mikrodash/internal/power/model"
@@ -38,8 +37,6 @@ const (
 	KindOutputOff     Kind = "output_off"
 	KindEvent         Kind = "event"
 	KindBatteryLow    Kind = "battery_low"
-	KindWarningBits   Kind = "warning_bits"
-	KindErrorBits     Kind = "error_bits"
 	KindNotResponding Kind = "not_responding"
 )
 
@@ -218,12 +215,6 @@ func (t *Tracker) conditions(r model.Reading) map[condKey]Cond {
 	}
 	if r.EventCode != 0 {
 		add(Cond{Kind: KindEvent, Code: r.EventCode, Text: r.EventText, Fault: r.Mode == model.ModeFault})
-	}
-	if v := r.Raw["warning_bits"]; v != 0 {
-		add(Cond{Kind: KindWarningBits, Code: int(v), Text: fmt.Sprintf("Warning bits %d", v)})
-	}
-	if v := r.Raw["error_bits"]; v != 0 {
-		add(Cond{Kind: KindErrorBits, Code: int(v), Text: fmt.Sprintf("Error bits %d", v)})
 	}
 	// Battery % is voltage-based and reads high whenever the charger runs, so
 	// it is trusted only on battery. A unit that judges its own battery low

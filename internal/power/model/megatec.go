@@ -56,7 +56,7 @@ const (
 // FromMegatec turns one status line, and the rating when the UPS gave one,
 // into a Reading.
 func (m *Model) FromMegatec(s megatec.Status, rating *megatec.Rating) Reading {
-	out := Reading{Values: map[string]float64{}, Flags: map[string]bool{}, Raw: map[string]uint16{}}
+	out := Reading{Values: map[string]float64{}, Flags: map[string]bool{}}
 	set := func(key string, v float64) {
 		if !math.IsNaN(v) {
 			out.Values[key] = v

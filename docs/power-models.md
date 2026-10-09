@@ -131,7 +131,8 @@ A Megatec UPS needs no register map: the protocol fixes what it reports. Its fil
    - `flags` - the status register, and which bit means what: `mains_ok`, `charger_on`,
      `inverter_on`, `output_on`, and for an online unit `bypass` (mains fed straight to the
      output; the page draws it in amber and says the load is not protected). Bit 0 is the lowest.
-   - `raw` - registers shown as plain numbers: `warning_bits`, `error_bits`.
+   - `version` - registers holding a firmware version in hundredths (`105` shows as `1.05`), one per
+     board; shown on the unit's page. Optional.
    - `event` - the register holding the current event code, the text of every code (`codes`), and
      which codes are **not** a fault (`notFault`: "no event", notices such as ECO starting).
 5. **Check it.** A wrong file is refused rather than half-read: an unknown key (a typo), a name not

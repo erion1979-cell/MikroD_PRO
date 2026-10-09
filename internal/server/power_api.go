@@ -120,15 +120,17 @@ type PowerState struct {
 	Mode       string             `json:"mode"`
 	Values     map[string]float64 `json:"values"`
 	Flags      map[string]bool    `json:"flags"`
-	Raw        map[string]int     `json:"raw"`
-	ApparentVA *float64           `json:"apparentVa"`
-	EventCode  int                `json:"eventCode"`
-	EventText  string             `json:"eventText"`
-	LastOK     int64              `json:"lastOk"`
-	ReplyMs    float64            `json:"replyMs"`
-	Polls      int64              `json:"polls"`
-	Answered   int64              `json:"answered"`
-	LastError  string             `json:"lastError"`
+	// Version is the firmware version(s) the unit reports, "1.05 · 1.22"; ""
+	// when its model names none.
+	Version    string   `json:"version"`
+	ApparentVA *float64 `json:"apparentVa"`
+	EventCode  int      `json:"eventCode"`
+	EventText  string   `json:"eventText"`
+	LastOK     int64    `json:"lastOk"`
+	ReplyMs    float64  `json:"replyMs"`
+	Polls      int64    `json:"polls"`
+	Answered   int64    `json:"answered"`
+	LastError  string   `json:"lastError"`
 	// Cause is which device the last poll failed at: "converter" (no
 	// connection to it), "unit" (the converter answers, the unit behind it
 	// does not), or "" (neither can be told, or the last poll answered).
@@ -142,7 +144,7 @@ type PowerState struct {
 func powerStateView(st power.State) PowerState {
 	out := PowerState{UnitID: st.UnitID, Online: st.Online, LastOK: st.LastOK, ReplyMs: st.ReplyMs,
 		Polls: st.Polls, Answered: st.Answered, LastError: st.LastError, Cause: string(st.Cause),
-		Values: map[string]float64{}, Flags: map[string]bool{}, Raw: map[string]int{}, Open: []PowerCond{}}
+		Values: map[string]float64{}, Flags: map[string]bool{}, Open: []PowerCond{}}
 	if r := st.Reading; r != nil {
 		out.HasReading = true
 		out.Mode, out.EventCode, out.EventText, out.ApparentVA = string(r.Mode), r.EventCode, r.EventText, r.ApparentVA
@@ -153,9 +155,7 @@ func powerStateView(st power.State) PowerState {
 		for k, v := range r.Flags {
 			out.Flags[k] = v
 		}
-		for k, v := range r.Raw {
-			out.Raw[k] = int(v)
-		}
+		out.Version = r.Version
 	}
 	for _, c := range st.Open {
 		out.Open = append(out.Open, PowerCond{Kind: string(c.Kind), Code: c.Code, Text: c.Text,

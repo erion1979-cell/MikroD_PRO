@@ -84,8 +84,8 @@ func TestAPowerOutageIsSentToTheChannelsThatWantIt(t *testing.T) {
 	p, doer, u := powerNotifyFixture(t)
 	p.srv.dispatchPower(u.ID, []power.Change{
 		{Cond: power.Cond{Kind: power.KindMainsLost, Text: "Mains lost"}, Began: true, At: 1000},
-		// Undocumented bits are shown on the page and never sent.
-		{Cond: power.Cond{Kind: power.KindWarningBits, Code: 4, Text: "Warning bits 4"}, Began: true, At: 1000},
+		// A kind an older build recorded (warning bits, from 033) is never sent.
+		{Cond: power.Cond{Kind: "warning_bits", Code: 4, Text: "Warning bits 4"}, Began: true, At: 1000},
 	}, nil)
 	got := doer.wait(t, 2)
 	if len(got) != 2 {
@@ -185,7 +185,7 @@ func TestPowerFiredReadsLikeAnAlert(t *testing.T) {
 			t.Errorf("%s: got %+v", c.c.Kind, f)
 		}
 	}
-	if _, _, ok := powerFired(power.Change{Cond: power.Cond{Kind: power.KindErrorBits}}, nil, false); ok {
-		t.Error("error bits are sent")
+	if _, _, ok := powerFired(power.Change{Cond: power.Cond{Kind: "error_bits"}}, nil, false); ok {
+		t.Error("an old error-bits condition is sent")
 	}
 }

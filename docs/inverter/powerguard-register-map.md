@@ -34,13 +34,13 @@ mode, read with QModMaster.
 | 013 | Internal temperature | ÷10 → °C | |
 | 014 | Ambient temperature | ÷10 → °C | Always equal to 013 so far |
 | 015–027 | reserved | | |
-| 028 | reserved | | Reads **105**, constant, meaning unknown |
-| 029 | reserved | | Reads **122**, constant, meaning unknown |
+| 028 | Version number | ÷100 | Reads **105** = 1.05. The manufacturer, 2026-10-09: "028 and 029 is the version number" |
+| 029 | Version number | ÷100 | Reads **122** = 1.22; probably a second board |
 | 030 | reserved | | |
 | 031 | Set status bits | | all bits reserved |
 | 032 | Running status bits | see below | |
-| 033 | Warning status bits | | **bits not documented** |
-| 034 | Error status bits | | **bits not documented** |
+| 033 | Warning status bits | | Not read. The manufacturer, 2026-10-09: "033 and 034, suggest to use 035" |
+| 034 | Error status bits | | Not read, as 033 |
 | 035 | Event code | see below | |
 
 ### Register 032 — running status bits

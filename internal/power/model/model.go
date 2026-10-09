@@ -5,7 +5,7 @@
 //
 // Each supported model is one JSON file under defs/<producer>/, embedded in the
 // binary. It says which registers to read and what each one means, mapped onto
-// the fixed names in `Measures`, `Flags` and `RawKeys`. Everything downstream -
+// the fixed names in `Measures` and `Flags`. Everything downstream -
 // the page, the alerts, the history - reads only those names, so supporting a
 // new model is adding a file, never new polling code.
 //
@@ -37,6 +37,7 @@ import (
 	"slices"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 
 	"mikrodash/internal/power/modbus"
@@ -81,10 +82,6 @@ var Protocols = []string{"modbus", "megatec"}
 // output all the time, mains never reaching the output except on bypass.
 var Topologies = []string{"offline", "online"}
 
-// RawKeys is every register a definition may pass through undecoded, for bit
-// fields whose meaning the manufacturer has not documented yet.
-var RawKeys = []string{"warning_bits", "error_bits"}
-
 // Mode is what a unit is doing, derived the same way for every model.
 type Mode string
 
@@ -116,9 +113,9 @@ type Field struct {
 	Signed bool `json:"signed,omitempty"`
 }
 
-// RawReg passes one register through undecoded.
-type RawReg struct {
-	Key      string          `json:"key"`
+// VersionReg is one register holding a firmware version, in hundredths: 105
+// reads as 1.05. A unit with more than one board names one per board.
+type VersionReg struct {
 	Reg      uint16          `json:"reg"`
 	Function modbus.Function `json:"function,omitempty"`
 }
@@ -161,13 +158,13 @@ type Model struct {
 	Details []string `json:"details,omitempty"`
 	// Default marks the model a new unit starts on in the form. At most one
 	// model in the catalogue may say so.
-	Default  bool     `json:"default,omitempty"`
-	Serial   string   `json:"serial"`
-	Reads    []Read   `json:"reads"`
-	Fields   []Field  `json:"fields"`
-	Flags    FlagReg  `json:"flags"`
-	Raw      []RawReg `json:"raw"`
-	Event    EventReg `json:"event"`
+	Default  bool         `json:"default,omitempty"`
+	Serial   string       `json:"serial"`
+	Reads    []Read       `json:"reads"`
+	Fields   []Field      `json:"fields"`
+	Flags    FlagReg      `json:"flags"`
+	Version  []VersionReg `json:"version,omitempty"`
+	Event    EventReg     `json:"event"`
 	codes    map[int]string
 	notFault map[int]bool
 }
@@ -180,7 +177,9 @@ type Reading struct {
 	// Values holds every measure the model reports, by key.
 	Values map[string]float64
 	Flags  map[string]bool
-	Raw    map[string]uint16
+	// Version is the firmware version(s) the unit reports, "1.05 · 1.22";
+	// empty when its model names none.
+	Version string
 	// ApparentVA is output voltage times output current: CALCULATED, not read
 	// from a register, and absent when the model reports either one not at all.
 	ApparentVA *float64
@@ -213,7 +212,7 @@ func (m *Model) Decode(regs [][]uint16) (Reading, error) {
 		return regs[i][off]
 	}
 
-	out := Reading{Values: map[string]float64{}, Flags: map[string]bool{}, Raw: map[string]uint16{}}
+	out := Reading{Values: map[string]float64{}, Flags: map[string]bool{}}
 	for _, f := range m.Fields {
 		raw := at(f.Function, f.Reg)
 		v := float64(raw)
@@ -226,9 +225,12 @@ func (m *Model) Decode(regs [][]uint16) (Reading, error) {
 	for name, bit := range m.Flags.Bits {
 		out.Flags[name] = status>>bit&1 == 1
 	}
-	for _, r := range m.Raw {
-		out.Raw[r.Key] = at(r.Function, r.Reg)
+	var versions []string
+	for _, v := range m.Version {
+		n := at(v.Function, v.Reg)
+		versions = append(versions, fmt.Sprintf("%d.%02d", n/100, n%100))
 	}
+	out.Version = strings.Join(versions, " · ")
 	if v, okV := out.Values["output_v"]; okV {
 		if a, okA := out.Values["output_a"]; okA {
 			va := float64(int64(v*a + 0.5))
@@ -297,7 +299,7 @@ func parse(name string, b []byte) (*Model, error) {
 		return fail("protocol %q: want modbus or megatec", m.Protocol)
 	}
 	registers := len(m.Reads) > 0 || len(m.Fields) > 0 || m.Flags.Reg != 0 || m.Flags.Bits != nil ||
-		len(m.Raw) > 0 || m.Event.Reg != 0 || m.Event.Codes != nil || m.Event.NotFault != nil
+		len(m.Version) > 0 || m.Event.Reg != 0 || m.Event.Codes != nil || m.Event.NotFault != nil
 	if m.Uses != "" {
 		// Its registers and protocol are the map's, filled in by load; any of
 		// its own would be silently ignored, so they are refused.
@@ -397,17 +399,8 @@ func parse(name string, b []byte) (*Model, error) {
 		}
 	}
 
-	knownRaw := map[string]bool{}
-	for _, k := range RawKeys {
-		knownRaw[k] = true
-	}
-	for i := range m.Raw {
-		r := &m.Raw[i]
-		if !knownRaw[r.Key] || seen[r.Key] {
-			return fail("raw %q is unknown or repeated", r.Key)
-		}
-		seen[r.Key] = true
-		if err := place("raw "+r.Key, &r.Function, r.Reg); err != nil {
+	for i := range m.Version {
+		if err := place("version", &m.Version[i].Function, m.Version[i].Reg); err != nil {
 			return fail("%v", err)
 		}
 	}
@@ -490,7 +483,7 @@ func resolveUses(all []*Model) error {
 		if base == nil || base.Uses != "" {
 			return fmt.Errorf("%s: uses %q, which is not a register map of %s", m.ID(), m.Uses, m.Producer)
 		}
-		m.Protocol, m.Reads, m.Fields, m.Flags, m.Raw, m.Event = base.Protocol, base.Reads, base.Fields, base.Flags, base.Raw, base.Event
+		m.Protocol, m.Reads, m.Fields, m.Flags, m.Version, m.Event = base.Protocol, base.Reads, base.Fields, base.Flags, base.Version, base.Event
 		m.codes, m.notFault = base.codes, base.notFault
 		if m.Serial == "" {
 			m.Serial = base.Serial
