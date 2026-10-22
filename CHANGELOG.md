@@ -2,6 +2,18 @@
 
 All notable changes to MikroDash will be documented in this file.
 
+## [0.8.71-pro.12] - A way back in
+
+Built on MikroDash 0.8.71, like 0.8.71-pro.11.
+
+### New
+
+- **Reset a forgotten password from the server.** `docker exec -it <container> mikrodash -data
+  /data -reset-password <username>` asks for the new password twice, without showing it, and sets
+  it for that one account. MikroDash keeps running and the new password works at once; other
+  users, settings and history are untouched. A wrong username lists the users there are. See
+  "Forgot a password" in the README.
+
 ## [0.8.71-pro.11] - The manufacturer's answers, and clearer probe messages
 
 Built on MikroDash 0.8.71, like 0.8.71-pro.10.
