@@ -136,13 +136,15 @@ func (s *Server) authPermissions(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"ok": true, "caps": caps})
 }
 
-// minPasswordLen is the live floor: `String(newPassword).length < 4`.
+// minPasswordLen is store.MinPasswordLen, the live floor:
+// `String(newPassword).length < 4`. It lives in the store so the
+// `-reset-password` command (cmd/mikrodash) holds a password to the same floor.
 //
 // The live comment records that `PUT /api/users/:id` SKIPS this check and calls
 // it "a gap on that route — not one to inherit here". Reproduced with the gap
 // left where it is: closing it on the other route is a change to the live app,
 // not a porting decision.
-const minPasswordLen = 4
+const minPasswordLen = store.MinPasswordLen
 
 func (s *Server) accountPassword(w http.ResponseWriter, r *http.Request) {
 	sess, err := s.auth.Validate(r.Header.Get("Cookie"))

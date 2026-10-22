@@ -34,6 +34,11 @@ import (
 // ErrNoSuchUser is returned when the id names no record.
 var ErrNoSuchUser = errors.New("store: no such user")
 
+// MinPasswordLen is the shortest password a person may set: first-run setup,
+// a new user, a password change on the account page and
+// `mikrodash -reset-password` all hold to it.
+const MinPasswordLen = 4
+
 // SetPassword replaces one user's password, minting a fresh salt.
 //
 // A NEW SALT EVERY TIME, matching `updateUser`: reusing the old one would make

@@ -396,6 +396,16 @@ The four feature switches are off in the bare binary and on in the image, becaus
 
 `GET /healthz` reports startup and router connection state, and is what the container health check uses.
 
+### Forgot a password
+
+Set a new one from the machine MikroDash runs on. The container keeps running, and nothing but that account's password changes:
+
+```bash
+docker exec -it <container> mikrodash -data /data -reset-password admin
+```
+
+It asks for the new password twice and does not show it. Give the account's username in place of `admin`; a wrong name lists the users there are.
+
 ---
 
 ## 🔒 Security

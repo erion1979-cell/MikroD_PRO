@@ -37,7 +37,11 @@ func main() {
 		staticDir = flag.String("static", "web/public",
 			"the vendored asset tree (/vendor, /css, /fonts, /logo.png, the login page). "+
 				"Empty serves none of them")
-		data   = flag.String("data", "/data", "the MikroDash data directory")
+		data = flag.String("data", "/data", "the MikroDash data directory")
+		// Not a server option: set a new password for one account and exit
+		// (resetpw.go). The password is typed, never passed.
+		resetPw = flag.String("reset-password", "",
+			"set a new password for this username, typed at the prompt, and exit (the server keeps running)")
 		webDir = flag.String("web", "web/dist", "the built frontend")
 		// The background pool runs by default: it holds the routers nobody has
 		// open, for the Devices page and for alerting. A second process pointed
@@ -115,6 +119,9 @@ func main() {
 			"geoip-lite's data directory, read for country lookups")
 	)
 	flag.Parse()
+	if *resetPw != "" {
+		os.Exit(runResetPassword(*data, *resetPw, os.Stdin, os.Stdout, isTerminal()))
+	}
 
 	// A VALUE FOR THE RETIRED -node IS REFUSED, loudly: whoever passed one
 	// expects a proxy that no longer exists.
