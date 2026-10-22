@@ -2,6 +2,34 @@
 
 All notable changes to MikroDash will be documented in this file.
 
+## [0.8.71-pro.11] - The manufacturer's answers, and clearer probe messages
+
+Built on MikroDash 0.8.71, like 0.8.71-pro.10.
+
+### New
+
+- **Firmware version.** Registers 028 and 029 are the PowerGuard units' version numbers; the
+  unit's page (Connection strip) and `powerprobe` show them, e.g. "Firmware 1.05 · 1.22". A model
+  file names them with `version`.
+- **`powerprobe` says which device failed.** Every failed reading is "CONVERTER NOT REACHABLE"
+  (off, unplugged, wrong IP or port) or "CONVERTER OK, UPS SILENT" / "INVERTER SILENT", with what
+  to check for the unit's protocol (RS485 or RS232 wiring, serial settings, converter mode).
+
+### Changed
+
+- **The light/dark button shows the mode it switches to**: a moon ("Switch to dark mode") while
+  light, a sun ("Switch to light mode") while dark.
+- **Registers 033/034 (warning and error bits) are no longer read**, on the manufacturer's advice
+  to use the event code in 035, which faults and alerts already use. The "Warning bits" / "Error
+  bits" entries no longer appear; one left open by an earlier version closes at the first reading.
+  A model file naming `raw` registers is refused.
+
+### Removed
+
+- **The six HSI models.** The HSI series has no communication port, so it cannot be monitored;
+  HSI-PLUS has one, with a different protocol, and will be added when its document arrives. A unit
+  set to an HSI model shows no model and is not read: edit it and choose its model again.
+
 ## [0.8.71-pro.10] - Optional parts in message templates
 
 Built on MikroDash 0.8.71, like 0.8.71-pro.9.
