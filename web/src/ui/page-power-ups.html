@@ -94,13 +94,15 @@
               <div>
                 <div class="pw-banner-title" id="pwBannerTitle"></div>
                 <div class="pw-banner-sub" id="pwBannerSub"></div>
+                <!-- While the unit is silent: when the values below were read. -->
+                <div class="pw-banner-sub pw-banner-stale" id="pwBannerStale" hidden></div>
               </div>
               <div class="pw-chips" id="pwChips"></div>
             </div>
 
             <div class="pw-grid">
               <div class="pw-card pw-wide">
-                <div class="pw-card-title">Power flow <span class="pw-calc" id="pwApparent"></span></div>
+                <div class="pw-card-title">Power flow <span class="pw-calc" id="pwApparent"></span><span class="pw-stale-tag"></span></div>
                 <!-- The boxes, and over them the particles running between
                      them (pages/power-flow-anim.ts). -->
                 <div class="pw-flow-wrap">
@@ -109,15 +111,15 @@
                 </div>
               </div>
               <div class="pw-card">
-                <div class="pw-card-title">Battery</div>
+                <div class="pw-card-title">Battery <span class="pw-stale-tag"></span></div>
                 <div class="pw-big" id="pwBatPct"></div>
                 <div class="pw-bar"><div id="pwBatBar"></div></div>
                 <div class="pw-kv" id="pwBatKv"></div>
               </div>
-              <div class="pw-card"><div class="pw-card-title">Input</div><div id="pwInput"></div></div>
-              <div class="pw-card"><div class="pw-card-title">Output</div><div id="pwOutput"></div></div>
-              <div class="pw-card"><div class="pw-card-title">Load</div><div id="pwLoad"></div></div>
-              <div class="pw-card"><div class="pw-card-title">Temperature</div><div id="pwTemp"></div></div>
+              <div class="pw-card"><div class="pw-card-title">Input <span class="pw-stale-tag"></span></div><div id="pwInput"></div></div>
+              <div class="pw-card"><div class="pw-card-title">Output <span class="pw-stale-tag"></span></div><div id="pwOutput"></div></div>
+              <div class="pw-card"><div class="pw-card-title">Load <span class="pw-stale-tag"></span></div><div id="pwLoad"></div></div>
+              <div class="pw-card"><div class="pw-card-title">Temperature <span class="pw-stale-tag"></span></div><div id="pwTemp"></div></div>
               <div class="pw-card pw-wide" id="pwHistoryCard">
                 <div class="pw-card-title">History
                   <span class="stab-bar" id="pwRange" role="tablist" aria-label="History window">

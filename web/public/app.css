@@ -3935,6 +3935,14 @@
 .pw-is-stale .pw-node-v,.pw-is-stale .pw-big,.pw-is-stale .pw-kv span:last-child{color:var(--text-muted)}
 .pw-is-stale .pw-node-mid .pw-node-v{color:var(--accent-err)}
 .pw-is-stale #pwBatBar{background:var(--text-muted)!important}
+/* Last read, not live: a tag on every card holding a value, and those cards'
+   borders dashed, while the unit is silent (pages/power-ups.ts). */
+.pw-stale-tag{display:none}
+.pw-is-stale .pw-stale-tag:not(:empty){display:inline-block;text-transform:none;letter-spacing:0;font-weight:600;
+  font-size:.66rem;padding:.05rem .45rem;border-radius:999px;color:var(--accent-warn);white-space:nowrap;
+  border:1px solid color-mix(in srgb,var(--accent-warn) 55%,transparent);background:color-mix(in srgb,var(--accent-warn) 10%,transparent)}
+.pw-is-stale .pw-card:has(.pw-stale-tag:not(:empty)){border-style:dashed}
+.pw-banner-stale{margin-top:.25rem;font-weight:600;color:var(--text-main)}
 .pw-chip-unknown{color:var(--text-muted);border-style:dashed}
 .pw-row-stale .pw-num{color:var(--text-muted)}
 .dc-pw-row-down{border-left:3px solid var(--accent-err);padding-left:.4rem}

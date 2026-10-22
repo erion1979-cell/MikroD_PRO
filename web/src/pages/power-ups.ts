@@ -543,6 +543,22 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
     }
     el('pwBannerTitle')!.textContent = title;
     el('pwBannerSub')!.textContent = sub;
+    // ── WHAT IS ON SCREEN IS LAST READ, SAID WHERE IT IS READ ────────────
+    //
+    // While the unit is silent every value on the page is the last one read,
+    // and greyed numbers alone did not say so. The banner gives the date and
+    // time, and every card holding a value carries a "Last read" tag.
+    const lastRead = stale && st?.hasReading && st.lastOk ? st.lastOk : 0;
+    const when = lastRead ? fmtTs(lastRead, false) : '';
+    const staleLine = el('pwBannerStale')!;
+    staleLine.hidden = !lastRead;
+    staleLine.textContent = lastRead
+      ? 'All values below are the last ones read, on ' + when + ' (' + ago(lastRead) + '). Nothing on this page is live.'
+      : '';
+    document.querySelectorAll<HTMLElement>('#pwUnitView .pw-stale-tag').forEach((t) => {
+      t.textContent = lastRead ? 'Last read · ' + ago(lastRead) : '';
+      t.title = lastRead ? 'Read on ' + when + '; the unit has not answered since' : '';
+    });
     el('pwChips')!.innerHTML = ([
       ['mains_ok', 'Mains normal'], ['charger_on', 'Charger running'], ['inverter_on', 'Inverter running'], ['output_on', 'Output on'],
       ['bypass', 'Bypass'],
@@ -577,7 +593,7 @@ export function initPowerUpsPage(socket: Socket, isVisible: (page: string) => bo
     const apparent = el('pwApparent')!;
     apparent.classList.toggle('pw-age-alert', down);
     apparent.textContent = stale
-      ? (st?.hasReading && st.lastOk ? 'Last known values, read ' + ago(st.lastOk) : down ? 'No reading yet' : '')
+      ? (st?.hasReading && st.lastOk ? '' : down ? 'No reading yet' : '')
       : st?.apparentVa != null ? 'Apparent power (calculated V × A): ' + Math.round(st.apparentVa).toLocaleString() + ' VA' : '';
     el('pwFlow')!.innerHTML = `
       <div class="pw-node${mainsTone}" data-pwn="input"><div class="pw-node-label">Mains input</div><div class="pw-node-v">${fmt(v.input_v)} V</div><div class="pw-node-sub">${fmt(v.input_hz)} Hz</div></div>
