@@ -2,6 +2,18 @@
 
 All notable changes to MikroDash will be documented in this file.
 
+## [0.8.71-pro.13] - Last read, said everywhere
+
+Built on MikroDash 0.8.71, like 0.8.71-pro.12.
+
+### Changed
+
+- **A unit that is not answering says its values are old.** The banner adds "All values below are
+  the last ones read, on 2026-10-09 07:16 (13 d ago). Nothing on this page is live.", every card
+  holding a value (power flow, battery, input, output, load, temperature) carries an amber
+  "Last read · 13 d ago" tag, and those cards' borders are dashed. Before, the numbers were only
+  greyed, with one small note in the power-flow corner.
+
 ## [0.8.71-pro.12] - A way back in
 
 Built on MikroDash 0.8.71, like 0.8.71-pro.11.
