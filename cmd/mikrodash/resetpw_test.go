@@ -66,9 +66,9 @@ func TestAResetIsRefusedWithoutHarm(t *testing.T) {
 		want        string
 	}{
 		"two different entries": {"Admin", "one-pass\nother-pass\n", true, "differ"},
-		"too short":              {"Admin", "abc\n", false, "at least"},
-		"no such user":           {"root", "long-enough\n", false, "the users are: Admin, viewer"},
-		"nothing typed":          {"Admin", "", false, "no password"},
+		"too short":             {"Admin", "abc\n", false, "at least"},
+		"no such user":          {"root", "long-enough\n", false, "the users are: Admin, viewer"},
+		"nothing typed":         {"Admin", "", false, "no password"},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
